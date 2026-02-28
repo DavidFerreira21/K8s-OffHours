@@ -7,19 +7,19 @@ Toolkit seguro e GitOps-friendly para escalonamento automatico de workloads Kube
 
 - Shutdown e startup automatizados via `CronJob`
 - Operacao em dois modos:
-- `ARGO_ENABLED=true` (integracao Argo CD)
-- `ARGO_ENABLED=false` (somente Kubernetes)
-- Selecao de namespaces por label de schedule
+  - `ARGO_ENABLED=true` (integracao Argo CD)
+  - `ARGO_ENABLED=false` (somente Kubernetes)
+- Selecao de alvos por schedule label
 - Exclusao de deployments criticos por annotation
 - Estrutura pronta para deploy em cluster
 
 ## Design Principles
 
-- Declarative first: selecao baseada em labels.
-- Idempotent operations: execucoes repetidas nao causam inconsistencias.
-- GitOps-friendly: integracao opcional com Argo CD.
-- Cloud-agnostic: compativel com qualquer Kubernetes com autoscaling.
-- Minimal surface area: sem CRD, sem Operator.
+- Declarative first: selecao baseada em labels
+- Idempotent operations: execucoes repetidas nao causam inconsistencias
+- GitOps-friendly: integracao opcional com Argo CD
+- Cloud-agnostic: compativel com qualquer Kubernetes com autoscaling
+- Minimal surface area: sem CRD e sem Operator
 
 ## Estrutura do repositorio
 
@@ -58,10 +58,8 @@ Toolkit seguro e GitOps-friendly para escalonamento automatico de workloads Kube
 
 ### 1) Escopo do schedule (`SCHEDULE_SCOPE`)
 
-O toolkit suporta dois escopos:
-
-- `namespace` (padrao): seleciona namespaces por label de schedule.
-- `deployment`: seleciona deployments por label de schedule (sem depender de label no namespace).
+- `namespace` (padrao): seleciona namespaces por label de schedule
+- `deployment`: seleciona deployments por label de schedule (sem depender de label no namespace)
 
 Label usada nos dois modos:
 
@@ -99,66 +97,83 @@ metadata:
 
 ### 5) Modo com Argo CD (`ARGO_ENABLED=true`)
 
-Implementacao Python usa Argo CD API mode (endpoint + token), sem dependencias de `argocd` CLI.
+A implementacao Python usa Argo CD API mode (`endpoint + token`), sem dependencia de `argocd` CLI.
 
-- Identifica apps com fallback em 4 opcoes (ordem padrao):
-- Label `argocd.argoproj.io/instance`
-- Annotation `argocd.argoproj.io/tracking-id` (extrai nome da app)
-- Override explicito por namespace: `offhours.platform.io/argopp` (label ou annotation, aceita lista separada por virgula)
-- Consulta Argo API (`/api/v1/applications`) filtrando por `spec.destination.namespace`
-- No `shutdown`: pausa sync do Argo e escala deployments para `0`
-- No `startup`: reativa sync e dispara refresh da Application
-- Se nao encontrar app em um namespace: registra erro em log e continua processando os demais namespaces
+No `shutdown`:
+
+- pausa sync das Applications elegiveis
+- escala deployments elegiveis para `0`
+
+No `startup`:
+
+- reativa sync das Applications
+- dispara sync da Application
+
+Se nao encontrar app em um namespace/deployment, registra erro em log e continua nos demais.
+
+#### Descoberta de Application (Argo)
+
+Ordem de descoberta:
+
+1. `argocd.argoproj.io/instance` (label)
+2. `argocd.argoproj.io/tracking-id` (annotation)
+3. `offhours.platform.io/argopp` (override por namespace)
+4. fallback por `spec.destination.namespace` na API do Argo
+
+Defaults recomendados:
+
+- metodos 1 e 2 habilitados
+- metodos 3 e 4 desabilitados
 
 Exemplo de override no namespace:
 
 ```yaml
 metadata:
   labels:
-    offhours.platform.io/argopp: "smb-app, billing-app"
+    offhours.platform.io/argopp: "smb-app,billing-app"
 ```
-
-#### Operacao manual no Argo (opcional)
-
-Tambem e possivel usar este toolkit com controle manual no Argo CD, quando voce preferir definir a politica fora do script:
-
-- Configurar `Sync Policy` manualmente por Application
-- Definir `Sync Windows` no Argo CD para bloquear/liberar sincronizacao por horario
-
-Nesse modelo:
-
-- O script continua escalando deployments
-- A governanca de sincronizacao fica no Argo CD (manual/politica central)
-
-Vantagens desse modelo:
-
-- Nao exige `ARGO_SERVER` e `ARGO_TOKEN` no CronJob
-- Reduz acoplamento e exposicao de credenciais da plataforma GitOps
-- Permite uso com outras ferramentas de GitOps (ex.: Flux), pois o offhours atua apenas via Kubernetes
-
-Atencao:
-
-- Se a ferramenta GitOps fizer reconciliacao automatica, ela pode reverter `replicas=0`.
-- Nesse caso, configure janela/politica de sincronizacao na propria ferramenta GitOps.
 
 #### Protecao em apps mistas (protegido + nao protegido)
 
 Use `PROTECTED_APP_STRICT_MODE`:
 
-- `true` (recomendado): se uma app tiver qualquer deployment protegido, o script nao pausa sync dessa app e nao escala nenhum deployment dela.
-- `false`: comportamento agressivo, pausa sync da app e escala apenas os deployments nao protegidos.
+- `true` (recomendado): se uma app tiver qualquer deployment protegido, o script nao pausa sync dessa app e nao escala nenhum deployment dela
+- `false`: pausa sync da app e escala apenas deployments nao protegidos
+
+#### Operacao manual no Argo (opcional)
+
+Tambem e possivel operar mantendo sincronizacao no Argo de forma manual/politica:
+
+- configurar `Sync Policy` manualmente por Application
+- configurar `Sync Windows` no Argo CD
+
+Vantagens:
+
+- nao exige `ARGO_SERVER` e `ARGO_TOKEN` no CronJob
+- reduz acoplamento e exposicao de credenciais
+- facilita coexistencia com outras ferramentas GitOps (ex.: Flux)
+
+Atencao:
+
+- se houver reconciliacao automatica ativa, `replicas=0` pode ser revertido
 
 ### 6) Modo sem Argo (`ARGO_ENABLED=false`)
 
-- No `shutdown`: salva replicas originais em annotation e escala para `0`
-- No `startup`: restaura replicas da annotation
-- Fallback: usa `DEFAULT_STARTUP_REPLICAS` (padrao `1`)
+No `shutdown`:
+
+- salva replicas originais em annotation
+- escala para `0`
+
+No `startup`:
+
+- restaura replicas da annotation
+- fallback para `DEFAULT_STARTUP_REPLICAS` (padrao `1`)
 
 ## Variaveis de ambiente
 
 | Variavel | Obrigatoria | Descricao |
 | --- | --- | --- |
-| `SCHEDULE_NAME` | Sim | Nome do schedule (valor da label no namespace) |
+| `SCHEDULE_NAME` | Sim | Nome do schedule (valor da label) |
 | `SCHEDULE_SCOPE` | Nao | `namespace` (padrao) ou `deployment` |
 | `ACTION` | Sim | `shutdown` ou `startup` |
 | `ARGO_ENABLED` | Sim | `true` ou `false` |
@@ -166,162 +181,112 @@ Use `PROTECTED_APP_STRICT_MODE`:
 | `ARGO_TOKEN` | Se `ARGO_ENABLED=true` | Token de API do Argo CD |
 | `ARGO_SCHEME` | Nao | `https` (padrao) ou `http` |
 | `ARGO_INSECURE` | Nao | `true` para ignorar validacao TLS em `https` |
-| `ARGO_DISCOVERY_USE_INSTANCE_LABEL` | Nao | `true/false` para usar `argocd.argoproj.io/instance` (padrao: `true`) |
-| `ARGO_DISCOVERY_USE_TRACKING_ID` | Nao | `true/false` para usar `argocd.argoproj.io/tracking-id` (padrao: `true`) |
-| `ARGO_DISCOVERY_USE_ARGOPP` | Nao | `true/false` para usar override `offhours.platform.io/argopp` (padrao: `false`) |
-| `ARGO_DISCOVERY_USE_DEST_NAMESPACE_FALLBACK` | Nao | `true/false` para fallback por destination namespace (padrao: `false`) |
-| `ARGO_API_RETRIES` | Nao | Quantidade de retries para erros transientes da API Argo (padrao agressivo: `2`) |
+| `ARGO_DISCOVERY_USE_INSTANCE_LABEL` | Nao | Habilita descoberta por `instance` (padrao: `true`) |
+| `ARGO_DISCOVERY_USE_TRACKING_ID` | Nao | Habilita descoberta por `tracking-id` (padrao: `true`) |
+| `ARGO_DISCOVERY_USE_ARGOPP` | Nao | Habilita override `offhours.platform.io/argopp` (padrao: `false`) |
+| `ARGO_DISCOVERY_USE_DEST_NAMESPACE_FALLBACK` | Nao | Habilita fallback por destination namespace (padrao: `false`) |
+| `ARGO_API_RETRIES` | Nao | Retries para erro transiente da API Argo (padrao agressivo: `2`) |
 | `ARGO_API_RETRY_BASE_SECONDS` | Nao | Backoff base em segundos (padrao agressivo: `0.2`) |
 | `ARGO_API_RETRY_MAX_SECONDS` | Nao | Teto do backoff em segundos (padrao agressivo: `1.0`) |
 | `VERBOSE` | Nao | Logs detalhados (`true/false`) |
 | `DRY_RUN` | Nao | Nao executa mudancas (`true/false`) |
 | `DEFAULT_STARTUP_REPLICAS` | Nao | Replica padrao no startup sem annotation |
-| `PROTECTED_APP_STRICT_MODE` | Nao | `true` para modo seguro em apps mistas, `false` para modo agressivo |
+| `PROTECTED_APP_STRICT_MODE` | Nao | `true` (seguro) ou `false` (agressivo) |
 
 ## Arquitetura do script Python
 
 Arquivo principal: `scripts/offhours.py`
 
-Responsabilidades por bloco:
+Blocos principais:
 
-- Validacao e parsing de ambiente:
-- `validate_env`, `env_str`, `env_bool`
-
-- Integracao Kubernetes:
-- `kubectl_get`, `get_target_namespaces`, `get_target_deployment_pairs`
-- `get_deployment`, `scale_deployment`, `save_original_replicas`
-
-- Integracao Argo API mode:
-- `argo_request`, `get_all_applications`, `get_app`
-- `argo_pause_app`, `argo_resume_and_sync_app`
-- Retry/backoff para `429` e `5xx` (erros transientes)
-
-- Descoberta de Application:
-- `get_argocd_apps_from_namespace`
-- `get_argocd_app_for_deployment`
-- fallback por `instance/tracking-id` -> `argopp` -> destination namespace
-
-Metodos de descoberta (controlados por variavel):
-
-- `ARGO_DISCOVERY_USE_INSTANCE_LABEL`: usa label `argocd.argoproj.io/instance`
-- `ARGO_DISCOVERY_USE_TRACKING_ID`: usa annotation `argocd.argoproj.io/tracking-id`
-- `ARGO_DISCOVERY_USE_ARGOPP`: usa override por namespace `offhours.platform.io/argopp`
-- `ARGO_DISCOVERY_USE_DEST_NAMESPACE_FALLBACK`: usa fallback pela `spec.destination.namespace` na API do Argo
-
-Ordem padrao atual:
-
-1. `instance` label
-2. `tracking-id`
-3. `argopp`
-4. destination namespace fallback
-
-No padrao de fabrica, os metodos 1 e 2 ficam habilitados, e os metodos 3 e 4 desabilitados.
-
-- Orquestracao por escopo e acao:
-- `handle_shutdown_namespace`, `handle_startup_namespace`
-- `handle_shutdown_deployment_scope`, `handle_startup_deployment_scope`
-- `main`
-
-Fluxo resumido:
-
-- `ACTION=shutdown`
-- Descobre alvo por `SCHEDULE_SCOPE`
-- (Se Argo ativo) pausa sync das apps elegiveis
-- Salva replicas originais
-- Escala deployments elegiveis para `0`
-
-- `ACTION=startup`
-- Descobre alvo por `SCHEDULE_SCOPE`
-- (Se Argo ativo) reativa sync e dispara sync das apps
-- (Sem Argo) restaura replicas por annotation/fallback
+- Validacao e parsing de ambiente: `validate_env`, `env_*`
+- Integracao Kubernetes: `kubectl_get`, `get_target_*`, `scale_deployment`
+- Integracao Argo API: `argo_request`, `get_all_applications`, `get_app`
+- Descoberta de app: `get_argocd_apps_from_namespace`, `get_argocd_app_for_deployment`
+- Orquestracao por escopo/acao: `handle_*` e `main`
 
 ## Requisitos
 
 - Cluster Kubernetes com `kubectl` configurado
-- Ferramentas no container: `python3`, `kubectl`, `curl` e `ca-certificates`
+- Ferramentas no container: `python3`, `kubectl`, `curl`, `ca-certificates`
 
 ## Idempotencia
 
-O script foi projetado para ser idempotente:
-
-- Se um deployment ja estiver com `replicas=0`, nao falha.
-- Se a annotation `offhours.platform.io/original-replicas` ja existir, nao sobrescreve.
-- No modo Argo, se a app ja estiver pausada, nao gera erro fatal.
+- Se um deployment ja estiver com `replicas=0`, nao falha
+- Se `offhours.platform.io/original-replicas` ja existir, nao sobrescreve
+- No modo Argo, se a app ja estiver pausada, nao gera erro fatal
 
 ## Permissoes necessarias (RBAC)
 
-A ServiceAccount utilizada pelo CronJob precisa de:
+A ServiceAccount do CronJob precisa de:
 
-- `get` e `list` em namespaces
-- `get`, `list`, `patch` e `update` em deployments
-- `get`, `patch` e `update` em `deployments/scale`
-- `get` e `list` em replicasets (opcional)
+- `get/list` em namespaces
+- `get/list/patch/update` em deployments
+- `get/patch/update` em `deployments/scale`
+- `get/list` em replicasets (opcional)
 
 Se usar Argo:
 
-- Permissao no Argo RBAC para `applications get/update/sync` nas apps alvo
+- permissao Argo RBAC para `applications get/update/sync` nas apps alvo
 
 ## Node autoscaling
 
-Importante: este toolkit apenas escala Deployments.
+Importante: este toolkit escala apenas Deployments.
 
-Para que haja reducao real de custo de infraestrutura, o cluster precisa possuir um mecanismo de node autoscaling, como:
+Para gerar reducao real de custo em infraestrutura, o cluster precisa de autoscaling de nodes:
 
 - Cluster Autoscaler
 - Karpenter
 - VMSS Autoscaling (AKS)
 - Node Auto Provisioning (GKE)
 
-Sem autoscaling, apenas os pods serao removidos, mas os nodes permanecerao ativos.
+Sem autoscaling, os pods saem, mas os nodes continuam ativos.
 
 ## Comportamento com HPA
 
 O script escala diretamente o Deployment para `replicas=0`.
 
-Se houver HPA associado:
+- No modo Argo: o estado desejado volta via Git no startup
+- No modo sem Argo: o HPA permanece configurado e o Deployment e escalado manualmente
 
-- No modo Argo: o HPA sera restaurado via Git no startup.
-- No modo sem Argo: o HPA permanece configurado, mas o Deployment e escalado manualmente.
-
-Observacao: em ambientes com HPA, o HPA pode redefinir replicas se houver metricas ativas.
-Recomenda-se validar comportamento em ambientes com HPA ativo.
+Observacao: com metricas ativas, HPA pode redefinir replicas. Valide em ambiente com HPA ativo.
 
 ## Interacao com ferramentas GitOps
 
-Se outra ferramenta GitOps (Argo, Flux, etc.) estiver configurada com sincronizacao automatica, ela pode reverter `replicas=0`.
+Se houver sincronizacao automatica em Argo/Flux/etc., `replicas=0` pode ser revertido.
 
-Neste caso, recomenda-se:
+Recomendacoes:
 
-- Pausar sincronizacao no shutdown (modo Argo)
-- Configurar Sync Windows
-- Ou utilizar operacao manual de sincronizacao
+- pausar sincronizacao no shutdown (modo Argo)
+- configurar Sync Windows
+- ou usar operacao manual de sincronizacao
 
 ## Seguranca de credenciais
 
-Se for necessario usar credenciais externas, nao versionar secrets em texto claro.
-Recomenda-se utilizar:
+Se precisar de credenciais externas, nao versionar secrets em texto claro.
+
+Recomendado:
 
 - External Secrets
 - Sealed Secrets
 - HashiCorp Vault
 
-Guia de usuario tecnico Argo para este projeto:
+Guia tecnico Argo deste projeto:
 
 - `docs/argocd-offhours-user.md`
 
 ## Deploy no cluster
 
-### Opcao 1: Janela unica (base)
+### Opcao 1: Janela unica (`k8s/base`)
 
-1. Ajuste imagem dos CronJobs em:
+1. Ajuste a imagem em:
 - `k8s/base/cronjob-shutdown.yaml`
 - `k8s/base/cronjob-startup.yaml`
 
-2. Timezone padrao dos CronJobs:
-- `spec.timeZone: "America/Sao_Paulo"` em ambos os manifests.
-- Altere esse campo se precisar de outro fuso.
+2. Ajuste timezone:
+- `spec.timeZone: "America/Sao_Paulo"` nos dois manifests
 
-3. Ajuste configuracoes em `k8s/base/config.yaml`:
+3. Ajuste `k8s/base/config.yaml`:
 - `SCHEDULE_NAME`
 - `SCHEDULE_SCOPE`
 - `ARGO_ENABLED`
@@ -330,40 +295,24 @@ Guia de usuario tecnico Argo para este projeto:
 - `DEFAULT_STARTUP_REPLICAS`
 - `PROTECTED_APP_STRICT_MODE`
 
-4. Se usar Argo CD, preencha `ARGO_SERVER` e `ARGO_TOKEN` em `k8s/base/config.yaml` (Secret).
+4. Se usar Argo, preencha `ARGO_SERVER` e `ARGO_TOKEN` no Secret.
 
-5. Aplique manifests:
+5. Aplique:
 
 ```bash
 kubectl apply -k k8s/base
 ```
 
-### Opcao 2: Multiplas janelas
+### Opcao 2: Multiplas janelas (`k8s/base/multi-window`)
 
-Use `k8s/base/multi-window` para rodar mais de um par de CronJobs com schedules diferentes.
+Use mais de um par de CronJobs com schedules diferentes.
 
-Janelas de exemplo:
+Exemplos:
 
-- `dev-weekday`: desliga `20:00` e liga `08:00` (seg-sex)
-- `qa-weekday`: desliga `22:00` e liga `07:00` (seg-sex)
+- `dev-weekday`: desliga `20:00`, liga `08:00` (seg-sex)
+- `qa-weekday`: desliga `22:00`, liga `07:00` (seg-sex)
 
-Rotule os namespaces conforme a janela:
-
-```yaml
-metadata:
-  labels:
-    offhours.platform.io/schedule: "dev-weekday"
-```
-
-ou
-
-```yaml
-metadata:
-  labels:
-    offhours.platform.io/schedule: "qa-weekday"
-```
-
-Se estiver usando `SCHEDULE_SCOPE=deployment`, aplique a label direto nos deployments:
+Rotule conforme a janela:
 
 ```yaml
 metadata:
@@ -371,7 +320,9 @@ metadata:
     offhours.platform.io/schedule: "dev-weekday"
 ```
 
-Aplique os manifests:
+Se `SCHEDULE_SCOPE=deployment`, aplique label direto nos deployments.
+
+Aplique:
 
 ```bash
 kubectl apply -k k8s/base/multi-window
@@ -379,7 +330,7 @@ kubectl apply -k k8s/base/multi-window
 
 ## Execucao local
 
-1. Copie `.env.example` para `.env` e ajuste valores.
+1. Copie `.env.example` para `.env` e ajuste valores
 2. Rode:
 
 ```bash
@@ -395,8 +346,6 @@ make build IMAGE=docker.io/davidferreira21/k8s-offhours:latest
 
 ## Exemplos de cenarios
 
-Aplicar os cenarios de exemplo:
-
 ```bash
 kubectl apply -f k8s/examples/scenarios/scenario-1-namespace-scope.yaml
 kubectl apply -f k8s/examples/scenarios/scenario-2-deployment-scope.yaml
@@ -406,10 +355,10 @@ kubectl apply -f k8s/examples/scenarios/scenario-4-mixed-protected-app.yaml
 
 Cenarios incluidos:
 
-- `scenario-1-namespace-scope.yaml`: uso de `SCHEDULE_SCOPE=namespace` com deployment protegido
-- `scenario-2-deployment-scope.yaml`: uso de `SCHEDULE_SCOPE=deployment` com label no deployment
+- `scenario-1-namespace-scope.yaml`: `SCHEDULE_SCOPE=namespace` com deployment protegido
+- `scenario-2-deployment-scope.yaml`: `SCHEDULE_SCOPE=deployment` com label no deployment
 - `scenario-3-argopp-override.yaml`: override de apps Argo via `offhours.platform.io/argopp`
-- `scenario-4-mixed-protected-app.yaml`: app mista (protegido + nao protegido) para testar `PROTECTED_APP_STRICT_MODE`
+- `scenario-4-mixed-protected-app.yaml`: app mista para testar `PROTECTED_APP_STRICT_MODE`
 
 ## Limitacoes
 
@@ -419,12 +368,11 @@ Cenarios incluidos:
 
 ## Recomendacao de uso
 
-- Solucao recomendada para ambientes HML, com foco em reducao de custo fora do horario comercial.
-- Nao recomendado para producao.
+- Recomendado para ambientes HML com foco em reducao de custo fora do horario comercial
+- Nao recomendado para producao
 
 ## Proximos passos sugeridos
 
 - Mover Secret para External Secrets/Vault
-- Adicionar testes automatizados do script
 - Adicionar suporte a StatefulSet (opcional)
 - Publicar imagem CI/CD com versionamento semantico
