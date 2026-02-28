@@ -1,5 +1,41 @@
+# Environment
 .env
 .env.*
+!.env.example
+
+# Logs
 *.log
+
+# Python cache/bytecode
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Test/cache artifacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Build/package artifacts
+dist/
+build/
+*.egg-info/
+.eggs/
+*.whl
+
+# IDE/editor
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db

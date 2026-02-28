@@ -279,9 +279,19 @@ Guia tecnico Argo deste projeto:
 
 ### Opcao 1: Janela unica (`k8s/base`)
 
-1. Ajuste a imagem em:
-- `k8s/base/cronjob-shutdown.yaml`
-- `k8s/base/cronjob-startup.yaml`
+1. Defina a imagem dos CronJobs (base e multi-window):
+
+```bash
+make set-image IMAGE=<sua-imagem:tag>
+```
+
+Valor padrao atual dos manifests: `docker.io/davidferreira21/k8s-offhours:latest`.
+
+Observacao: para rodar no seu cluster, troque a imagem para o seu repositorio/tag antes do deploy:
+
+```bash
+make set-image IMAGE=<sua-imagem:tag>
+```
 
 2. Ajuste timezone:
 - `spec.timeZone: "America/Sao_Paulo"` nos dois manifests
@@ -340,8 +350,22 @@ make run-startup
 
 ## Build da imagem
 
+Fluxo local (kind):
+
 ```bash
-make build IMAGE=docker.io/davidferreira21/k8s-offhours:latest
+make build-local
+make set-image IMAGE=k8s-offhours:local
+make kind-load IMAGE=k8s-offhours:local KIND_CLUSTER=kind
+kubectl apply -k k8s/base
+```
+
+Fluxo com registry (qualquer cluster):
+
+```bash
+make build IMAGE=<seu-registry>/k8s-offhours:<tag>
+docker push <seu-registry>/k8s-offhours:<tag>
+make set-image IMAGE=<seu-registry>/k8s-offhours:<tag>
+kubectl apply -k k8s/base
 ```
 
 ## Exemplos de cenarios
