@@ -9,8 +9,7 @@ metadata:
   name: checkout-api
   namespace: app-dev-deploy-scope
   labels:
-    app.kubernetes.io/name: checkout-api
-    offhours.platform.io/schedule: "qa-weekday"
+    offhours.platform.io/schedule: "dev"
 spec:
   replicas: 2
   selector:
@@ -34,7 +33,7 @@ metadata:
   namespace: app-dev-deploy-scope
   labels:
     app.kubernetes.io/name: billing-worker
-    offhours.platform.io/schedule: "qa-weekday"
+    offhours.platform.io/schedule: "dev"
   annotations:
     offhours.platform.io/protected: "true"
 spec:

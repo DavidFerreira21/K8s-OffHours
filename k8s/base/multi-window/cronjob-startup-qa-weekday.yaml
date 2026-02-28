@@ -17,7 +17,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: offhours
-              image: docker.io/davidferreira21/k8s-offhours:latest
+              image: david210/k8s-offhours:837da69f6fd6c1470512cfcdd0786be2b0084354
               imagePullPolicy: IfNotPresent
               envFrom:
                 - configMapRef:
