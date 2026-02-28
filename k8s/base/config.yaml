@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: offhours-config
+  namespace: offhours-system
+data:
+  SCHEDULE_NAME: dev
+  SCHEDULE_SCOPE: "namespace"
+  ARGO_ENABLED: "false"
+  VERBOSE: "false"
+  DRY_RUN: "false"
+  DEFAULT_STARTUP_REPLICAS: "1"
+  PROTECTED_APP_STRICT_MODE: "true"
+  ARGO_SCHEME: "https"
+  ARGO_INSECURE: "false"
+  ARGO_DISCOVERY_USE_INSTANCE_LABEL: "true"
+  ARGO_DISCOVERY_USE_TRACKING_ID: "true"
+  ARGO_DISCOVERY_USE_ARGOPP: "false"
+  ARGO_DISCOVERY_USE_DEST_NAMESPACE_FALLBACK: "false"
+  ARGO_API_RETRIES: "2"
+  ARGO_API_RETRY_BASE_SECONDS: "0.2"
+  ARGO_API_RETRY_MAX_SECONDS: "1.0"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: offhours-secrets
+  namespace: offhours-system
+type: Opaque
+stringData:
+  ARGO_SERVER: ""
+  ARGO_TOKEN: ""

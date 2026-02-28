@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: offhours-config-qa-weekday
+  namespace: offhours-system
+data:
+  SCHEDULE_NAME: qa-weekday
+  SCHEDULE_SCOPE: "namespace"
+  ARGO_ENABLED: "false"
+  VERBOSE: "false"
+  DRY_RUN: "false"
+  DEFAULT_STARTUP_REPLICAS: "1"
+  PROTECTED_APP_STRICT_MODE: "true"

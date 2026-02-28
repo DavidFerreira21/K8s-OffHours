@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: offhours-startup-dev-weekday
+  namespace: offhours-system
+spec:
+  schedule: "2-59/4 * * * *"
+  timeZone: "America/Sao_Paulo"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: offhours-sa
+          restartPolicy: OnFailure
+          containers:
+            - name: offhours
+              image: docker.io/davidferreira21/k8s-offhours:latest
+              imagePullPolicy: IfNotPresent
+              envFrom:
+                - configMapRef:
+                    name: offhours-config-dev-weekday
+                - secretRef:
+                    name: offhours-secrets
+              env:
+                - name: ACTION
+                  value: startup

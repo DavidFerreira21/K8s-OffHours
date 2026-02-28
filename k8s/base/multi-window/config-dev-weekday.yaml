@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: offhours-config-dev-weekday
+  namespace: offhours-system
+data:
+  SCHEDULE_NAME: dev-weekday
+  SCHEDULE_SCOPE: "namespace"
+  ARGO_ENABLED: "false"
+  VERBOSE: "false"
+  DRY_RUN: "false"
+  DEFAULT_STARTUP_REPLICAS: "1"
+  PROTECTED_APP_STRICT_MODE: "true"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: offhours-secrets
+  namespace: offhours-system
+type: Opaque
+stringData:
+  ARGO_SERVER: ""
+  ARGO_TOKEN: ""

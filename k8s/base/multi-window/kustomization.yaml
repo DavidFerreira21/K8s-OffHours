@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: offhours-system
+resources:
+  - ../namespace.yaml
+  - ../rbac.yaml
+  - config-dev-weekday.yaml
+  - config-qa-weekday.yaml
+  - cronjob-shutdown-dev-weekday.yaml
+  - cronjob-startup-dev-weekday.yaml
+  - cronjob-shutdown-qa-weekday.yaml
+  - cronjob-startup-qa-weekday.yaml
