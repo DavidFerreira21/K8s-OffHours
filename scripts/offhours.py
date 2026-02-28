@@ -3,13 +3,12 @@
 
 import json
 import os
+import shutil
 import ssl
 import subprocess
 import sys
-import shutil
 import time
-from typing import Dict, List, Optional, Set, Tuple
-from urllib import parse, request, error
+from urllib import error, parse, request
 
 SCRIPT_NAME = "offhours"
 
@@ -42,7 +41,7 @@ def fail(msg: str) -> None:
 
 
 # Environment parsing and validation ------------------------------------------------------------
-def env_str(name: str, default: Optional[str] = None) -> str:
+def env_str(name: str, default: str | None = None) -> str:
     """Read a string environment variable, optionally with default."""
     value = os.getenv(name)
     if value is None:
@@ -86,7 +85,7 @@ def env_float(name: str, default: float) -> float:
         return default
 
 
-def run_cmd(args: List[str], capture: bool = False, dry_run: bool = False) -> str:
+def run_cmd(args: list[str], capture: bool = False, dry_run: bool = False) -> str:
     """Execute a shell command and optionally capture stdout."""
     cmd_str = " ".join(args)
     if dry_run and env_bool("DRY_RUN", False):
@@ -106,7 +105,7 @@ def run_cmd(args: List[str], capture: bool = False, dry_run: bool = False) -> st
         return ""
 
 
-def run_json(args: List[str]) -> Dict:
+def run_json(args: list[str]) -> dict:
     """Execute a command and parse its JSON output."""
     raw = run_cmd(args, capture=True)
     try:
@@ -158,10 +157,10 @@ def validate_env() -> None:
 # Kubernetes helpers ---------------------------------------------------------------------------
 def kubectl_get(
     kind: str,
-    namespace: Optional[str] = None,
-    selector: Optional[str] = None,
-    name: Optional[str] = None,
-) -> Dict:
+    namespace: str | None = None,
+    selector: str | None = None,
+    name: str | None = None,
+) -> dict:
     """Return a Kubernetes resource (or list) as JSON via kubectl."""
     args = ["kubectl"]
     if namespace:
@@ -175,14 +174,14 @@ def kubectl_get(
     return run_json(args)
 
 
-def get_target_namespaces() -> List[str]:
+def get_target_namespaces() -> list[str]:
     """List namespaces selected by schedule label."""
     schedule = env_str("SCHEDULE_NAME")
     data = kubectl_get("ns", selector=f"offhours.platform.io/schedule={schedule}")
     return [i["metadata"]["name"] for i in data.get("items", [])]
 
 
-def get_target_deployment_pairs() -> List[Tuple[str, str]]:
+def get_target_deployment_pairs() -> list[tuple[str, str]]:
     """List (namespace, deployment) pairs selected by schedule label."""
     schedule = env_str("SCHEDULE_NAME")
     data = run_json(
@@ -197,19 +196,16 @@ def get_target_deployment_pairs() -> List[Tuple[str, str]]:
             "json",
         ]
     )
-    return [
-        (i["metadata"]["namespace"], i["metadata"]["name"])
-        for i in data.get("items", [])
-    ]
+    return [(i["metadata"]["namespace"], i["metadata"]["name"]) for i in data.get("items", [])]
 
 
-def get_deployments(namespace: str) -> List[str]:
+def get_deployments(namespace: str) -> list[str]:
     """List deployment names from a namespace."""
     data = kubectl_get("deploy", namespace=namespace)
     return [i["metadata"]["name"] for i in data.get("items", [])]
 
 
-def get_deployment(namespace: str, name: str) -> Dict:
+def get_deployment(namespace: str, name: str) -> dict:
     """Return a single deployment object."""
     return kubectl_get("deploy", namespace=namespace, name=name)
 
@@ -227,9 +223,7 @@ def save_original_replicas(namespace: str, deploy: str) -> None:
     annotations = obj.get("metadata", {}).get("annotations", {})
     existing = annotations.get("offhours.platform.io/original-replicas", "")
     if existing:
-        debug(
-            f"Original replicas annotation already exists for {namespace}/{deploy}: {existing}"
-        )
+        debug(f"Original replicas annotation already exists for {namespace}/{deploy}: {existing}")
         return
 
     replicas = obj.get("spec", {}).get("replicas", 1)
@@ -285,7 +279,7 @@ def argo_base_url() -> str:
     return f"{scheme}://{server}".rstrip("/")
 
 
-def argo_ssl_context() -> Optional[ssl.SSLContext]:
+def argo_ssl_context() -> ssl.SSLContext | None:
     """Return SSL context, optionally skipping TLS validation when enabled."""
     if not argo_base_url().startswith("https://"):
         return None
@@ -297,9 +291,7 @@ def argo_ssl_context() -> Optional[ssl.SSLContext]:
     return ctx
 
 
-def argo_request(
-    method: str, path: str, body: Optional[Dict] = None, mutate: bool = False
-) -> Dict:
+def argo_request(method: str, path: str, body: dict | None = None, mutate: bool = False) -> dict:
     """Call Argo API with retry/backoff for transient failures."""
     url = f"{argo_base_url()}{path}"
     payload = None
@@ -358,19 +350,19 @@ def argo_request(
     return {}
 
 
-def get_all_applications() -> List[Dict]:
+def get_all_applications() -> list[dict]:
     """List Argo CD applications."""
     data = argo_request("GET", "/api/v1/applications")
     return data.get("items", []) if isinstance(data, dict) else []
 
 
-def get_app(app_name: str) -> Dict:
+def get_app(app_name: str) -> dict:
     """Get full Argo application object by name."""
     quoted = parse.quote(app_name, safe="")
     return argo_request("GET", f"/api/v1/applications/{quoted}")
 
 
-def parse_argopp_values(value: str) -> List[str]:
+def parse_argopp_values(value: str) -> list[str]:
     """Parse comma-separated app list used by offhours.platform.io/argopp."""
     out = []
     for item in value.split(","):
@@ -380,10 +372,10 @@ def parse_argopp_values(value: str) -> List[str]:
     return out
 
 
-def resolve_app_names(candidates: List[str], all_apps: List[Dict]) -> Set[str]:
+def resolve_app_names(candidates: list[str], all_apps: list[dict]) -> set[str]:
     """Normalize and validate candidate app references against Argo app inventory."""
     existing = {a.get("metadata", {}).get("name", "") for a in all_apps}
-    refs: Set[str] = set()
+    refs: set[str] = set()
     for candidate in candidates:
         if not candidate:
             continue
@@ -394,7 +386,7 @@ def resolve_app_names(candidates: List[str], all_apps: List[Dict]) -> Set[str]:
 
 
 # Argo app discovery ---------------------------------------------------------------------------
-def get_argocd_apps_from_namespace(namespace: str) -> Set[str]:
+def get_argocd_apps_from_namespace(namespace: str) -> set[str]:
     """Discover Argo apps for a namespace using configured discovery chain."""
     all_apps = get_all_applications()
 
@@ -404,7 +396,7 @@ def get_argocd_apps_from_namespace(namespace: str) -> Set[str]:
     use_dest_fallback = env_bool("ARGO_DISCOVERY_USE_DEST_NAMESPACE_FALLBACK", False)
 
     # Priority 1/2: deployment metadata (usually most reliable in many setups)
-    discovered: Set[str] = set()
+    discovered: set[str] = set()
     for deploy in get_deployments(namespace):
         obj = get_deployment(namespace, deploy)
         d_labels = obj.get("metadata", {}).get("labels", {})
@@ -414,11 +406,7 @@ def get_argocd_apps_from_namespace(namespace: str) -> Set[str]:
         if instance:
             discovered.add(instance)
 
-        tracking = (
-            d_annotations.get("argocd.argoproj.io/tracking-id", "")
-            if use_tracking
-            else ""
-        )
+        tracking = d_annotations.get("argocd.argoproj.io/tracking-id", "") if use_tracking else ""
         if tracking:
             discovered.add(tracking.split(":", 1)[0])
 
@@ -436,7 +424,9 @@ def get_argocd_apps_from_namespace(namespace: str) -> Set[str]:
         )
         if explicit:
             debug(
-                f"Namespace {namespace} using explicit Argo app mapping via offhours.platform.io/argopp"
+                "Namespace "
+                f"{namespace} using explicit Argo app mapping via "
+                "offhours.platform.io/argopp"
             )
             refs = resolve_app_names(parse_argopp_values(explicit), all_apps)
             if refs:
@@ -477,16 +467,13 @@ def app_has_protected_deployment(app_name: str, namespace: str) -> bool:
     """Check whether an app has any protected deployment in namespace."""
     app = get_app(app_name)
     for resource in app.get("status", {}).get("resources", []):
-        if (
-            resource.get("kind") == "Deployment"
-            and resource.get("namespace") == namespace
-        ):
+        if resource.get("kind") == "Deployment" and resource.get("namespace") == namespace:
             if is_protected_deployment(namespace, resource.get("name", "")):
                 return True
     return False
 
 
-def get_argocd_app_for_deployment(namespace: str, deploy: str) -> Optional[str]:
+def get_argocd_app_for_deployment(namespace: str, deploy: str) -> str | None:
     """Resolve Argo app owner for a deployment."""
     obj = get_deployment(namespace, deploy)
     labels = obj.get("metadata", {}).get("labels", {})
@@ -502,9 +489,7 @@ def get_argocd_app_for_deployment(namespace: str, deploy: str) -> Optional[str]:
         if refs:
             return sorted(refs)[0]
 
-    tracking = (
-        annotations.get("argocd.argoproj.io/tracking-id", "") if use_tracking else ""
-    )
+    tracking = annotations.get("argocd.argoproj.io/tracking-id", "") if use_tracking else ""
     if tracking:
         refs = resolve_app_names([tracking.split(":", 1)[0]], all_apps)
         if refs:
@@ -552,18 +537,17 @@ def handle_shutdown_namespace(namespace: str) -> None:
     """Execute shutdown flow for namespace scope."""
     log(f"Processing namespace for shutdown: {namespace}")
 
-    strict_blocked_apps: Set[str] = set()
-    apps: Set[str] = set()
+    strict_blocked_apps: set[str] = set()
+    apps: set[str] = set()
 
     if env_bool("ARGO_ENABLED", False):
         apps = get_argocd_apps_from_namespace(namespace)
         if not apps:
             err(
-                f"No Argo CD application found for namespace {namespace}. Continuing with namespace processing."
+                "No Argo CD application found for namespace "
+                f"{namespace}. Continuing with namespace processing."
             )
-            warn(
-                "Deployments may be reconciled back by Argo CD if sync was not paused."
-            )
+            warn("Deployments may be reconciled back by Argo CD if sync was not paused.")
 
         if env_bool("PROTECTED_APP_STRICT_MODE", True):
             for app in sorted(apps):
@@ -575,10 +559,7 @@ def handle_shutdown_namespace(namespace: str) -> None:
                     )
 
         for app in sorted(apps):
-            if (
-                env_bool("PROTECTED_APP_STRICT_MODE", True)
-                and app in strict_blocked_apps
-            ):
+            if env_bool("PROTECTED_APP_STRICT_MODE", True) and app in strict_blocked_apps:
                 log(f"Strict mode: skipping sync pause for app {app}")
                 continue
             argo_pause_app(app)
@@ -588,9 +569,7 @@ def handle_shutdown_namespace(namespace: str) -> None:
             log(f"Skipping protected deployment: {namespace}/{deploy}")
             continue
 
-        if env_bool("ARGO_ENABLED", False) and env_bool(
-            "PROTECTED_APP_STRICT_MODE", True
-        ):
+        if env_bool("ARGO_ENABLED", False) and env_bool("PROTECTED_APP_STRICT_MODE", True):
             owner = get_argocd_app_for_deployment(namespace, deploy)
             if owner and owner in strict_blocked_apps:
                 log(
@@ -611,7 +590,8 @@ def handle_startup_namespace(namespace: str) -> None:
         apps = get_argocd_apps_from_namespace(namespace)
         if not apps:
             err(
-                f"No Argo CD application found for namespace {namespace}. Skipping Argo startup actions and continuing."
+                "No Argo CD application found for namespace "
+                f"{namespace}. Skipping Argo startup actions and continuing."
             )
             return
 
@@ -635,8 +615,8 @@ def handle_shutdown_deployment_scope() -> None:
         warn(f"No deployments found for schedule: {env_str('SCHEDULE_NAME')}")
         return
 
-    app_keys: Set[Tuple[str, str]] = set()
-    strict_blocked_keys: Set[Tuple[str, str]] = set()
+    app_keys: set[tuple[str, str]] = set()
+    strict_blocked_keys: set[tuple[str, str]] = set()
 
     if env_bool("ARGO_ENABLED", False):
         for namespace, deploy in pairs:
@@ -653,7 +633,8 @@ def handle_shutdown_deployment_scope() -> None:
                 if app_has_protected_deployment(app, namespace):
                     strict_blocked_keys.add((namespace, app))
                     log(
-                        f"Strict mode: app {app} in namespace {namespace} has protected deployment(s), "
+                        "Strict mode: app "
+                        f"{app} in namespace {namespace} has protected deployment(s), "
                         "app will not be paused and its deployments will not be scaled"
                     )
 
@@ -662,9 +643,7 @@ def handle_shutdown_deployment_scope() -> None:
                 env_bool("PROTECTED_APP_STRICT_MODE", True)
                 and (namespace, app) in strict_blocked_keys
             ):
-                log(
-                    f"Strict mode: skipping sync pause for app {app} in namespace {namespace}"
-                )
+                log(f"Strict mode: skipping sync pause for app {app} in namespace {namespace}")
                 continue
             argo_pause_app(app)
 
@@ -673,9 +652,7 @@ def handle_shutdown_deployment_scope() -> None:
             log(f"Skipping protected deployment: {namespace}/{deploy}")
             continue
 
-        if env_bool("ARGO_ENABLED", False) and env_bool(
-            "PROTECTED_APP_STRICT_MODE", True
-        ):
+        if env_bool("ARGO_ENABLED", False) and env_bool("PROTECTED_APP_STRICT_MODE", True):
             owner = get_argocd_app_for_deployment(namespace, deploy)
             if owner and (namespace, owner) in strict_blocked_keys:
                 log(
@@ -696,7 +673,7 @@ def handle_startup_deployment_scope() -> None:
         return
 
     if env_bool("ARGO_ENABLED", False):
-        app_keys: Set[Tuple[str, str]] = set()
+        app_keys: set[tuple[str, str]] = set()
         for namespace, deploy in pairs:
             owner = get_argocd_app_for_deployment(namespace, deploy)
             if owner is None:
@@ -756,4 +733,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

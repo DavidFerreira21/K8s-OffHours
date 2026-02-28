@@ -3,6 +3,27 @@
 K8s OffHours is a safe, GitOps-friendly toolkit for automated off-hours scaling of Kubernetes workloads.
 Toolkit seguro e GitOps-friendly para escalonamento automatico de workloads Kubernetes fora do horario comercial.
 
+## Objetivo principal
+
+Este projeto foi feito para reducao de custo de cluster, principalmente em ambientes de HML.
+
+Exemplo tipico de janela:
+
+- ambiente HML ligado de `08:00` a `20:00` (seg-sex)
+- fora dessa janela, workloads sao reduzidos automaticamente
+
+Comparando com operacao 24x7:
+
+- janela ativa semanal: `60h` (12h x 5 dias)
+- semana completa: `168h`
+- reducao potencial de horas de worker node: cerca de `64.3%` (`108h` a menos por semana)
+
+Observacao importante:
+
+- este projeto escala Pods/Deployments
+- para economia real de infraestrutura, e obrigatorio ter node autoscaling configurado (ex.: Cluster Autoscaler, Karpenter, VMSS Autoscaling, NAP)
+- sem autoscaling, os pods reduzem, mas os nodes continuam ligados
+
 ## O que este projeto entrega
 
 - Shutdown e startup automatizados via `CronJob`

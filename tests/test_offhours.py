@@ -1,5 +1,5 @@
-import io
 import importlib.util
+import io
 from pathlib import Path
 from urllib import error
 
@@ -54,9 +54,7 @@ def test_discovery_uses_instance_and_tracking_first(monkeypatch):
             {"metadata": {"name": "app-b"}},
         ],
     )
-    monkeypatch.setattr(
-        offhours, "get_deployments", lambda namespace: ["api", "worker"]
-    )
+    monkeypatch.setattr(offhours, "get_deployments", lambda namespace: ["api", "worker"])
 
     def fake_get_deployment(namespace, deploy):
         if deploy == "api":
@@ -105,9 +103,7 @@ def test_discovery_uses_argopp_override_when_enabled(monkeypatch):
         offhours,
         "kubectl_get",
         lambda kind, namespace=None, selector=None, name=None: {
-            "metadata": {
-                "labels": {"offhours.platform.io/argopp": "unknown-app, known-app"}
-            }
+            "metadata": {"labels": {"offhours.platform.io/argopp": "unknown-app, known-app"}}
         },
     )
 
@@ -120,15 +116,9 @@ def test_shutdown_namespace_strict_mode_blocks_mixed_app(monkeypatch):
     monkeypatch.setenv("ARGO_ENABLED", "true")
     monkeypatch.setenv("PROTECTED_APP_STRICT_MODE", "true")
 
-    monkeypatch.setattr(
-        offhours, "get_argocd_apps_from_namespace", lambda namespace: {"app-main"}
-    )
-    monkeypatch.setattr(
-        offhours, "app_has_protected_deployment", lambda app, namespace: True
-    )
-    monkeypatch.setattr(
-        offhours, "get_deployments", lambda namespace: ["api", "critical"]
-    )
+    monkeypatch.setattr(offhours, "get_argocd_apps_from_namespace", lambda namespace: {"app-main"})
+    monkeypatch.setattr(offhours, "app_has_protected_deployment", lambda app, namespace: True)
+    monkeypatch.setattr(offhours, "get_deployments", lambda namespace: ["api", "critical"])
     monkeypatch.setattr(
         offhours,
         "is_protected_deployment",
@@ -146,9 +136,7 @@ def test_shutdown_namespace_strict_mode_blocks_mixed_app(monkeypatch):
     monkeypatch.setattr(
         offhours, "scale_deployment", lambda ns, dep, r: scaled.append((ns, dep, r))
     )
-    monkeypatch.setattr(
-        offhours, "save_original_replicas", lambda ns, dep: saved.append((ns, dep))
-    )
+    monkeypatch.setattr(offhours, "save_original_replicas", lambda ns, dep: saved.append((ns, dep)))
 
     offhours.handle_shutdown_namespace("ns")
 
