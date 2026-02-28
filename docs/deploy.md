@@ -5,6 +5,8 @@
 - Cluster Kubernetes com `kubectl` configurado
 - Ferramentas no container: `python3`, `kubectl`, `curl`, `ca-certificates`
 
+Observacao: para validar economia real apos o deploy, veja [cost-optimization.md](cost-optimization.md).
+
 ## Opcao 1: Janela unica (`k8s/base`)
 
 1. Defina a imagem:

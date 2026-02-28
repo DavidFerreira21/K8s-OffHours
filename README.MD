@@ -15,6 +15,7 @@ Exemplo comum:
 Comparado com operacao 24x7, uma janela de 12h por dia util representa potencial de reducao de horas de worker node em torno de `64.3%`.
 
 Detalhes de operacao, limites e premissas: [operations.md](docs/operations.md).
+Detalhes de estrategia de economia e autoscaling de nos: [cost-optimization.md](docs/cost-optimization.md).
 
 ## Como funciona
 
@@ -54,6 +55,7 @@ Guia tecnico Argo CD (usuario, token e RBAC): [argocd-offhours-user.md](docs/arg
 - Recomendado para HML; nao recomendado para producao sem avaliacao especifica.
 
 Detalhes (RBAC, HPA, GitOps e seguranca): [operations.md](docs/operations.md).
+Detalhes de custo e como obter economia real: [cost-optimization.md](docs/cost-optimization.md).
 
 ## Como usar em ambiente real
 
@@ -201,5 +203,10 @@ Se esta chegando agora, comece por: [docs/README.md](docs/README.md).
 - Modos de operacao e variaveis: [configuration.md](docs/configuration.md)
 - Deploy detalhado (base e multi-window): [deploy.md](docs/deploy.md)
 - Operacao, RBAC, HPA, GitOps e seguranca: [operations.md](docs/operations.md)
+- Otimizacao de custo e integracao com autoscaling de nos: [cost-optimization.md](docs/cost-optimization.md)
 - Cenarios de validacao: [scenarios.md](docs/scenarios.md)
 - Guia tecnico Argo CD (usuario/token/RBAC): [argocd-offhours-user.md](docs/argocd-offhours-user.md)
+
+## Licenca
+
+Este projeto esta sob a licenca MIT. Veja [LICENSE](LICENSE).

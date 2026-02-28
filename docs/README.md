@@ -20,6 +20,9 @@ Se voce chegou agora no repositorio, siga esta ordem:
 - Quero operar com seguranca (RBAC, HPA, GitOps):
   - [operations.md](operations.md)
 
+- Quero maximizar economia de custo com autoscaling de nos:
+  - [cost-optimization.md](cost-optimization.md)
+
 - Quero validar cenarios prontos:
   - [scenarios.md](scenarios.md)
 

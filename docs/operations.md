@@ -1,5 +1,7 @@
 # Operacao e seguranca
 
+Para aprofundar em economia real de infraestrutura e requisitos de autoscaling de nos, veja [cost-optimization.md](cost-optimization.md).
+
 ## Permissoes necessarias (RBAC)
 
 A ServiceAccount do CronJob precisa de:
@@ -54,3 +56,10 @@ Recomendado:
 - External Secrets
 - Sealed Secrets
 - HashiCorp Vault
+
+## Referencias cruzadas
+
+- visao geral: [README.MD](../README.MD)
+- configuracao: [configuration.md](configuration.md)
+- deploy: [deploy.md](deploy.md)
+- custo e autoscaling de nos: [cost-optimization.md](cost-optimization.md)
