@@ -147,6 +147,6 @@ Acao:
 
 ## Referencias cruzadas
 
-- visao geral: `README.MD`
-- variaveis: `docs/configuration.md`
-- operacao e seguranca: `docs/operations.md`
+- visao geral: [README.MD](../README.MD)
+- variaveis: [configuration.md](configuration.md)
+- operacao e seguranca: [operations.md](operations.md)

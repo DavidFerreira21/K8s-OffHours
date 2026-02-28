@@ -2,26 +2,26 @@
 
 Se voce chegou agora no repositorio, siga esta ordem:
 
-1. `README.MD` (visao geral da solucao)
-2. `docs/deploy.md` (como implantar)
-3. `docs/scenarios.md` (como validar)
+1. [README.MD](../README.MD) (visao geral da solucao)
+2. [deploy.md](deploy.md) (como implantar)
+3. [scenarios.md](scenarios.md) (como validar)
 
 ## Escolha rapida por objetivo
 
 - Quero entender como funciona internamente:
-  - `docs/architecture.md`
+  - [architecture.md](architecture.md)
 
 - Quero configurar variaveis e labels:
-  - `docs/configuration.md`
+  - [configuration.md](configuration.md)
 
 - Quero implantar em cluster real:
-  - `docs/deploy.md`
+  - [deploy.md](deploy.md)
 
 - Quero operar com seguranca (RBAC, HPA, GitOps):
-  - `docs/operations.md`
+  - [operations.md](operations.md)
 
 - Quero validar cenarios prontos:
-  - `docs/scenarios.md`
+  - [scenarios.md](scenarios.md)
 
 - Quero integrar com Argo CD (usuario/token/RBAC):
-  - `docs/argocd-offhours-user.md`
+  - [argocd-offhours-user.md](argocd-offhours-user.md)

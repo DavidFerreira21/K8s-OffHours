@@ -14,7 +14,7 @@ Exemplo comum:
 
 Comparado com operacao 24x7, uma janela de 12h por dia util representa potencial de reducao de horas de worker node em torno de `64.3%`.
 
-Detalhes de operacao, limites e premissas: `docs/operations.md`.
+Detalhes de operacao, limites e premissas: [operations.md](docs/operations.md).
 
 ## Como funciona
 
@@ -42,9 +42,9 @@ Modo GitOps:
 - `ARGO_ENABLED=true`: integra com Argo CD (API), pausa/reativa sync
 - `ARGO_ENABLED=false`: atua apenas em Kubernetes
 
-Detalhes de arquitetura e fluxo interno: `docs/architecture.md`.
-Detalhes de modos e variaveis: `docs/configuration.md`.
-Guia tecnico Argo CD (usuario, token e RBAC): `docs/argocd-offhours-user.md`.
+Detalhes de arquitetura e fluxo interno: [architecture.md](docs/architecture.md).
+Detalhes de modos e variaveis: [configuration.md](docs/configuration.md).
+Guia tecnico Argo CD (usuario, token e RBAC): [argocd-offhours-user.md](docs/argocd-offhours-user.md).
 
 ## Observacoes importantes
 
@@ -53,7 +53,7 @@ Guia tecnico Argo CD (usuario, token e RBAC): `docs/argocd-offhours-user.md`.
 - Sem autoscaling, os pods reduzem, mas os nodes continuam ativos.
 - Recomendado para HML; nao recomendado para producao sem avaliacao especifica.
 
-Detalhes (RBAC, HPA, GitOps e seguranca): `docs/operations.md`.
+Detalhes (RBAC, HPA, GitOps e seguranca): [operations.md](docs/operations.md).
 
 ## Como usar em ambiente real
 
@@ -71,7 +71,7 @@ Push para o registry:
 docker push <registry>/k8s-offhours:<tag>
 ```
 
-Opcoes de build/deploy (kind, registry, multi-window): `docs/deploy.md`.
+Opcoes de build/deploy (kind, registry, multi-window): [deploy.md](docs/deploy.md).
 
 ### 2) Ajustar manifests base
 
@@ -108,7 +108,7 @@ Ajuste horarios dos CronJobs:
 - `spec.schedule`
 - `spec.timeZone`
 
-Referencia completa de variaveis e modos: `docs/configuration.md`.
+Referencia completa de variaveis e modos: [configuration.md](docs/configuration.md).
 
 ### 3) Marcar os alvos
 
@@ -140,7 +140,7 @@ metadata:
     offhours.platform.io/protected: "true"
 ```
 
-Mais exemplos de labels/annotations e descoberta de apps: `docs/configuration.md`.
+Mais exemplos de labels/annotations e descoberta de apps: [configuration.md](docs/configuration.md).
 
 ### 4) Aplicar no cluster
 
@@ -148,7 +148,7 @@ Mais exemplos de labels/annotations e descoberta de apps: `docs/configuration.md
 kubectl apply -k k8s/base
 ```
 
-Passo a passo detalhado de deploy: `docs/deploy.md`.
+Passo a passo detalhado de deploy: [deploy.md](docs/deploy.md).
 
 ### 5) Testar manualmente antes de operar por schedule
 
@@ -168,7 +168,7 @@ kubectl -n offhours-system create job --from=cronjob/offhours-startup manual-sta
 kubectl -n offhours-system logs -f job/manual-startup
 ```
 
-Roteiro de cenarios de validacao: `docs/scenarios.md`.
+Roteiro de cenarios de validacao: [scenarios.md](docs/scenarios.md).
 
 ## Estrutura do repositorio
 
@@ -193,13 +193,13 @@ Roteiro de cenarios de validacao: `docs/scenarios.md`.
 
 ## Inicio rapido da documentacao
 
-Se esta chegando agora, comece por: `docs/README.md`.
+Se esta chegando agora, comece por: [docs/README.md](docs/README.md).
 
 ## Documentacao detalhada
 
-- Arquitetura e fluxo interno: `docs/architecture.md`
-- Modos de operacao e variaveis: `docs/configuration.md`
-- Deploy detalhado (base e multi-window): `docs/deploy.md`
-- Operacao, RBAC, HPA, GitOps e seguranca: `docs/operations.md`
-- Cenarios de validacao: `docs/scenarios.md`
-- Guia tecnico Argo CD (usuario/token/RBAC): `docs/argocd-offhours-user.md`
+- Arquitetura e fluxo interno: [architecture.md](docs/architecture.md)
+- Modos de operacao e variaveis: [configuration.md](docs/configuration.md)
+- Deploy detalhado (base e multi-window): [deploy.md](docs/deploy.md)
+- Operacao, RBAC, HPA, GitOps e seguranca: [operations.md](docs/operations.md)
+- Cenarios de validacao: [scenarios.md](docs/scenarios.md)
+- Guia tecnico Argo CD (usuario/token/RBAC): [argocd-offhours-user.md](docs/argocd-offhours-user.md)
