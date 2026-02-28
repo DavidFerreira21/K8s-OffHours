@@ -1,16 +1,28 @@
 # Argo CD Offhours User
 
-Exemplo de criacao de usuario tecnico para o K8s OffHours Toolkit.
+Guia para criar um usuario tecnico no Argo CD para o K8s OffHours.
 
-## Objetivo
+## Quando usar este guia
 
-Criar um usuario `offhours` com token de API para:
+Use este guia quando `ARGO_ENABLED=true` e voce precisa de token/API para:
 
-- Ler applications
-- Pausar sync (update)
-- Disparar sync
+- ler Applications
+- pausar/retomar sync (update)
+- disparar sync
 
-## 1) Criar conta no Argo CD
+Resultado esperado: usuario `offhours` com token e permissao minima para operacao.
+
+## Permissoes minimas necessarias
+
+| Recurso | Acao |
+| --- | --- |
+| `applications` | `get` |
+| `applications` | `update` |
+| `applications` | `sync` |
+
+## Fluxo A - Argo no mesmo cluster do Offhours
+
+### 1) Criar conta no Argo CD
 
 ```bash
 kubectl -n argocd patch configmap argocd-cm --type merge -p '{
@@ -20,7 +32,7 @@ kubectl -n argocd patch configmap argocd-cm --type merge -p '{
 }'
 ```
 
-## 2) RBAC global (todos os projetos)
+### 2) Aplicar RBAC minimo
 
 ```bash
 kubectl -n argocd patch configmap argocd-rbac-cm --type merge -p '{
@@ -30,16 +42,16 @@ kubectl -n argocd patch configmap argocd-rbac-cm --type merge -p '{
 }'
 ```
 
-## 3) Aplicar alteracoes
+### 3) Reiniciar Argo server
 
 ```bash
 kubectl -n argocd rollout restart deploy argocd-server
 kubectl -n argocd rollout status deploy argocd-server
 ```
 
-## 4) Gerar token do usuario
+### 4) Gerar token
 
-Opcao recomendada (dentro do cluster):
+Recomendado: gerar token de dentro do cluster.
 
 ```bash
 kubectl -n argocd run argocd-cli --rm -it --restart=Never \
@@ -56,14 +68,7 @@ argocd account generate-token --account offhours \
   --server argocd-server.argocd.svc.cluster.local:80 --plaintext --grpc-web
 ```
 
-## 5) Configurar no Offhours
-
-No secret `offhours-secrets`:
-
-- `ARGO_SERVER`: endpoint do Argo CD
-- `ARGO_TOKEN`: token do usuario `offhours`
-
-Exemplo:
+### 5) Configurar no Offhours
 
 ```bash
 kubectl -n offhours-system patch secret offhours-secrets --type merge -p '{
@@ -74,19 +79,74 @@ kubectl -n offhours-system patch secret offhours-secrets --type merge -p '{
 }'
 ```
 
-## Variante recomendada para producao (escopo por projeto)
+## Fluxo B - Argo em cluster separado
 
-Em vez de `*/*`, restringir por projeto:
+Quando Argo nao esta no mesmo cluster, use endpoint roteavel para os pods do Offhours.
 
-```text
-p, role:offhours, applications, get, projeto-a/*, allow
-p, role:offhours, applications, update, projeto-a/*, allow
-p, role:offhours, applications, sync, projeto-a/*, allow
-g, offhours, role:offhours
+Exemplo:
+
+- `ARGO_SERVER`: host/URL acessivel da rede do cluster Offhours
+- `ARGO_SCHEME`: `https` (ou `http` se ambiente controlado)
+- `ARGO_INSECURE`: `true` apenas se necessario
+
+Observacao:
+
+- `localhost` funciona no seu terminal, mas nao dentro do pod do CronJob.
+
+## Validacao rapida
+
+1. Execute um shutdown manual:
+
+```bash
+kubectl -n offhours-system delete job manual-shutdown-argo --ignore-not-found
+kubectl -n offhours-system create job --from=cronjob/offhours-shutdown manual-shutdown-argo
+kubectl -n offhours-system logs -f job/manual-shutdown-argo
 ```
+
+2. Resultado esperado:
+
+- app entra em sync manual (pause)
+- deployment alvo escala para `0`
+
+3. Execute startup manual e confirme retorno do sync e replicas.
+
+## Erros comuns e troubleshooting
+
+### `permission denied`
+
+Causa: token sem RBAC suficiente.
+
+Acao:
+
+- validar `policy.csv` com `applications get/update/sync`
+- regenerar token apos ajuste
+
+### `no such host` / erro DNS
+
+Causa: `ARGO_SERVER` inacessivel de dentro do pod.
+
+Acao:
+
+- para mesmo cluster, use `argocd-server.argocd.svc.cluster.local:80`
+- para cluster separado, usar endpoint roteavel
+
+### `connection refused` / `EOF`
+
+Causa: endpoint, scheme (`http/https`) ou TLS incorreto.
+
+Acao:
+
+- revisar `ARGO_SCHEME`
+- usar `ARGO_INSECURE=true` somente quando necessario
 
 ## Seguranca
 
-- Nao versionar tokens reais no Git.
-- Usar External Secrets / Sealed Secrets / Vault.
-- Rotacionar tokens periodicamente.
+- nao versionar tokens em Git
+- usar External Secrets / Sealed Secrets / Vault
+- rotacionar token periodicamente
+
+## Referencias cruzadas
+
+- visao geral: `README.MD`
+- variaveis: `docs/configuration.md`
+- operacao e seguranca: `docs/operations.md`
