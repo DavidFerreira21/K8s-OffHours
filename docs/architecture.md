@@ -45,15 +45,16 @@ No `startup`:
 
 Ordem de descoberta:
 
-1. `argocd.argoproj.io/instance` (label)
-2. `argocd.argoproj.io/tracking-id` (annotation)
-3. `offhours.platform.io/argopp` (override por namespace)
-4. fallback por `spec.destination.namespace` na API do Argo
+1. `offhours.platform.io/argopp` (override manual por namespace), quando `ARGO_DISCOVERY_USE_MANUAL=true`
+2. cadeia automatica, quando `ARGO_DISCOVERY_USE_AUTOMATIC=true`:
+   - `argocd.argoproj.io/instance` (label)
+   - `argocd.argoproj.io/tracking-id` (annotation)
+   - fallback por `spec.destination.namespace` na API do Argo
 
 Defaults recomendados:
 
-- 1 e 2 habilitados
-- 3 e 4 desabilitados
+- automatico habilitado
+- manual desabilitado
 
 ### Protecao em apps mistas (`PROTECTED_APP_STRICT_MODE`)
 

@@ -139,10 +139,8 @@ def validate_env() -> None:
 
     _ = env_str("DEFAULT_STARTUP_REPLICAS", "1")
     _ = env_bool("PROTECTED_APP_STRICT_MODE", True)
-    _ = env_bool("ARGO_DISCOVERY_USE_INSTANCE_LABEL", True)
-    _ = env_bool("ARGO_DISCOVERY_USE_TRACKING_ID", True)
-    _ = env_bool("ARGO_DISCOVERY_USE_ARGOPP", False)
-    _ = env_bool("ARGO_DISCOVERY_USE_DEST_NAMESPACE_FALLBACK", False)
+    _ = env_bool("ARGO_DISCOVERY_USE_AUTOMATIC", True)
+    _ = env_bool("ARGO_DISCOVERY_USE_MANUAL", False)
     _ = env_int("ARGO_API_RETRIES", 2)
     _ = env_float("ARGO_API_RETRY_BASE_SECONDS", 0.2)
     _ = env_float("ARGO_API_RETRY_MAX_SECONDS", 1.0)
@@ -389,33 +387,11 @@ def resolve_app_names(candidates: list[str], all_apps: list[dict]) -> set[str]:
 def get_argocd_apps_from_namespace(namespace: str) -> set[str]:
     """Discover Argo apps for a namespace using configured discovery chain."""
     all_apps = get_all_applications()
+    use_automatic = env_bool("ARGO_DISCOVERY_USE_AUTOMATIC", True)
+    use_manual = env_bool("ARGO_DISCOVERY_USE_MANUAL", False)
 
-    use_instance = env_bool("ARGO_DISCOVERY_USE_INSTANCE_LABEL", True)
-    use_tracking = env_bool("ARGO_DISCOVERY_USE_TRACKING_ID", True)
-    use_argopp = env_bool("ARGO_DISCOVERY_USE_ARGOPP", False)
-    use_dest_fallback = env_bool("ARGO_DISCOVERY_USE_DEST_NAMESPACE_FALLBACK", False)
-
-    # Priority 1/2: deployment metadata (usually most reliable in many setups)
-    discovered: set[str] = set()
-    for deploy in get_deployments(namespace):
-        obj = get_deployment(namespace, deploy)
-        d_labels = obj.get("metadata", {}).get("labels", {})
-        d_annotations = obj.get("metadata", {}).get("annotations", {})
-
-        instance = d_labels.get("argocd.argoproj.io/instance") if use_instance else None
-        if instance:
-            discovered.add(instance)
-
-        tracking = d_annotations.get("argocd.argoproj.io/tracking-id", "") if use_tracking else ""
-        if tracking:
-            discovered.add(tracking.split(":", 1)[0])
-
-    refs = resolve_app_names(sorted(discovered), all_apps)
-    if refs:
-        return refs
-
-    # Priority 3: explicit namespace override
-    if use_argopp:
+    # Priority 1: explicit manual namespace override
+    if use_manual:
         ns_obj = kubectl_get("ns", name=namespace)
         labels = ns_obj.get("metadata", {}).get("labels", {})
         annotations = ns_obj.get("metadata", {}).get("annotations", {})
@@ -432,10 +408,30 @@ def get_argocd_apps_from_namespace(namespace: str) -> set[str]:
             if refs:
                 return refs
 
-    # Priority 4: destination namespace fallback
-    if not use_dest_fallback:
+    # Priority 2: automatic discovery chain
+    if not use_automatic:
         return set()
 
+    # 2.1 deployment metadata (instance/tracking-id)
+    discovered: set[str] = set()
+    for deploy in get_deployments(namespace):
+        obj = get_deployment(namespace, deploy)
+        d_labels = obj.get("metadata", {}).get("labels", {})
+        d_annotations = obj.get("metadata", {}).get("annotations", {})
+
+        instance = d_labels.get("argocd.argoproj.io/instance")
+        if instance:
+            discovered.add(instance)
+
+        tracking = d_annotations.get("argocd.argoproj.io/tracking-id", "")
+        if tracking:
+            discovered.add(tracking.split(":", 1)[0])
+
+    refs = resolve_app_names(sorted(discovered), all_apps)
+    if refs:
+        return refs
+
+    # 2.2 destination namespace fallback
     warn(
         f"No Argo CD app metadata found in deployments for namespace {namespace}. "
         "Falling back to Argo API destination namespace."
@@ -479,21 +475,26 @@ def get_argocd_app_for_deployment(namespace: str, deploy: str) -> str | None:
     labels = obj.get("metadata", {}).get("labels", {})
     annotations = obj.get("metadata", {}).get("annotations", {})
 
-    all_apps = get_all_applications()
-    use_instance = env_bool("ARGO_DISCOVERY_USE_INSTANCE_LABEL", True)
-    use_tracking = env_bool("ARGO_DISCOVERY_USE_TRACKING_ID", True)
+    if env_bool("ARGO_DISCOVERY_USE_MANUAL", False):
+        for app in sorted(get_argocd_apps_from_namespace(namespace)):
+            if app_manages_deployment(app, namespace, deploy):
+                return app
 
-    instance = labels.get("argocd.argoproj.io/instance") if use_instance else None
-    if instance:
-        refs = resolve_app_names([instance], all_apps)
-        if refs:
-            return sorted(refs)[0]
+    use_automatic = env_bool("ARGO_DISCOVERY_USE_AUTOMATIC", True)
+    all_apps = get_all_applications() if use_automatic else []
 
-    tracking = annotations.get("argocd.argoproj.io/tracking-id", "") if use_tracking else ""
-    if tracking:
-        refs = resolve_app_names([tracking.split(":", 1)[0]], all_apps)
-        if refs:
-            return sorted(refs)[0]
+    if use_automatic:
+        instance = labels.get("argocd.argoproj.io/instance")
+        if instance:
+            refs = resolve_app_names([instance], all_apps)
+            if refs:
+                return sorted(refs)[0]
+
+        tracking = annotations.get("argocd.argoproj.io/tracking-id", "")
+        if tracking:
+            refs = resolve_app_names([tracking.split(":", 1)[0]], all_apps)
+            if refs:
+                return sorted(refs)[0]
 
     for app in sorted(get_argocd_apps_from_namespace(namespace)):
         if app_manages_deployment(app, namespace, deploy):

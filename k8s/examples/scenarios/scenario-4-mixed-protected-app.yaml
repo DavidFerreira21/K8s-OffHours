@@ -3,7 +3,9 @@ kind: Namespace
 metadata:
   name: app-dev-mixed
   labels:
-    offhours.platform.io/schedule: "dev-weekday"
+    offhours.platform.io/schedule: "dev"
+  annotations:
+    offhours.platform.io/argoapp: "offhours-scenario-4"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -11,18 +13,16 @@ metadata:
   name: web
   namespace: app-dev-mixed
   labels:
-    app.kubernetes.io/name: web
-    argocd.argoproj.io/instance: mixed-app
+    name: web
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app.kubernetes.io/name: web
+      name: web
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: web
-        argocd.argoproj.io/instance: mixed-app
+        name: web
     spec:
       containers:
         - name: web
@@ -38,18 +38,16 @@ metadata:
   annotations:
     offhours.platform.io/protected: "true"
   labels:
-    app.kubernetes.io/name: processor
-    argocd.argoproj.io/instance: mixed-app
+    name: processor
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: processor
+      name: processor
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: processor
-        argocd.argoproj.io/instance: mixed-app
+        name: processor
     spec:
       containers:
         - name: processor

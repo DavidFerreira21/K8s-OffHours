@@ -12,10 +12,8 @@
 | `ARGO_TOKEN` | Se `ARGO_ENABLED=true` | Token de API do Argo CD |
 | `ARGO_SCHEME` | Nao | `https` (padrao) ou `http` |
 | `ARGO_INSECURE` | Nao | `true` para ignorar validacao TLS em `https` |
-| `ARGO_DISCOVERY_USE_INSTANCE_LABEL` | Nao | Habilita descoberta por `instance` (padrao: `true`) |
-| `ARGO_DISCOVERY_USE_TRACKING_ID` | Nao | Habilita descoberta por `tracking-id` (padrao: `true`) |
-| `ARGO_DISCOVERY_USE_ARGOPP` | Nao | Habilita override `offhours.platform.io/argopp` (padrao: `false`) |
-| `ARGO_DISCOVERY_USE_DEST_NAMESPACE_FALLBACK` | Nao | Habilita fallback por destination namespace (padrao: `false`) |
+| `ARGO_DISCOVERY_USE_AUTOMATIC` | Nao | Habilita descoberta automatica (`instance`, `tracking-id`, fallback por destination namespace) (padrao: `true`) |
+| `ARGO_DISCOVERY_USE_MANUAL` | Nao | Habilita override manual por namespace via `offhours.platform.io/argopp` (padrao: `false`) |
 | `ARGO_API_RETRIES` | Nao | Retries para erro transiente da API Argo (padrao agressivo: `2`) |
 | `ARGO_API_RETRY_BASE_SECONDS` | Nao | Backoff base em segundos (padrao agressivo: `0.2`) |
 | `ARGO_API_RETRY_MAX_SECONDS` | Nao | Teto do backoff em segundos (padrao agressivo: `1.0`) |
