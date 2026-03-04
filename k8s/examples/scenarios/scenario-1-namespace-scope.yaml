@@ -3,7 +3,7 @@ kind: Namespace
 metadata:
   name: app-dev-ns-scope
   labels:
-    offhours.platform.io/schedule: "dev"
+    offhours.platform.io/schedule: "testing"
 ---
 apiVersion: apps/v1
 kind: Deployment

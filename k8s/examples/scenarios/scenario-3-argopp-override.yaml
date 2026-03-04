@@ -3,7 +3,7 @@ kind: Namespace
 metadata:
   name: app-dev-argopp
   labels:
-    offhours.platform.io/schedule: "dev"
+    offhours.platform.io/schedule: "testing"
   annotations:
     offhours.platform.io/argopp: "offhours-scenario-3"
 ---

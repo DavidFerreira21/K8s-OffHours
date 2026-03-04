@@ -4,7 +4,7 @@ metadata:
   name: offhours-config
   namespace: offhours-system
 data:
-  SCHEDULE_NAME: dev
+  SCHEDULE_NAME: "testing"
   SCHEDULE_SCOPE: "namespace"
   ARGO_ENABLED: "true"
   VERBOSE: "true"

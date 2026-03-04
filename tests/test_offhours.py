@@ -28,10 +28,8 @@ def clear_env(monkeypatch):
         "ARGO_TOKEN",
         "ARGO_SCHEME",
         "ARGO_INSECURE",
-        "ARGO_DISCOVERY_USE_INSTANCE_LABEL",
-        "ARGO_DISCOVERY_USE_TRACKING_ID",
-        "ARGO_DISCOVERY_USE_ARGOPP",
-        "ARGO_DISCOVERY_USE_DEST_NAMESPACE_FALLBACK",
+        "ARGO_DISCOVERY_USE_AUTOMATIC",
+        "ARGO_DISCOVERY_USE_MANUAL",
         "ARGO_API_RETRIES",
         "ARGO_API_RETRY_BASE_SECONDS",
         "ARGO_API_RETRY_MAX_SECONDS",
@@ -41,10 +39,8 @@ def clear_env(monkeypatch):
 
 
 def test_discovery_uses_instance_and_tracking_first(monkeypatch):
-    monkeypatch.setenv("ARGO_DISCOVERY_USE_INSTANCE_LABEL", "true")
-    monkeypatch.setenv("ARGO_DISCOVERY_USE_TRACKING_ID", "true")
-    monkeypatch.setenv("ARGO_DISCOVERY_USE_ARGOPP", "false")
-    monkeypatch.setenv("ARGO_DISCOVERY_USE_DEST_NAMESPACE_FALLBACK", "false")
+    monkeypatch.setenv("ARGO_DISCOVERY_USE_AUTOMATIC", "true")
+    monkeypatch.setenv("ARGO_DISCOVERY_USE_MANUAL", "false")
 
     monkeypatch.setattr(
         offhours,
@@ -81,10 +77,8 @@ def test_discovery_uses_instance_and_tracking_first(monkeypatch):
 
 
 def test_discovery_uses_argopp_override_when_enabled(monkeypatch):
-    monkeypatch.setenv("ARGO_DISCOVERY_USE_INSTANCE_LABEL", "false")
-    monkeypatch.setenv("ARGO_DISCOVERY_USE_TRACKING_ID", "false")
-    monkeypatch.setenv("ARGO_DISCOVERY_USE_ARGOPP", "true")
-    monkeypatch.setenv("ARGO_DISCOVERY_USE_DEST_NAMESPACE_FALLBACK", "false")
+    monkeypatch.setenv("ARGO_DISCOVERY_USE_AUTOMATIC", "false")
+    monkeypatch.setenv("ARGO_DISCOVERY_USE_MANUAL", "true")
 
     monkeypatch.setattr(
         offhours,
@@ -110,6 +104,42 @@ def test_discovery_uses_argopp_override_when_enabled(monkeypatch):
     apps = offhours.get_argocd_apps_from_namespace("ns")
 
     assert apps == {"known-app"}
+
+
+def test_discovery_prefers_manual_when_both_methods_enabled(monkeypatch):
+    monkeypatch.setenv("ARGO_DISCOVERY_USE_AUTOMATIC", "true")
+    monkeypatch.setenv("ARGO_DISCOVERY_USE_MANUAL", "true")
+
+    monkeypatch.setattr(
+        offhours,
+        "get_all_applications",
+        lambda: [
+            {"metadata": {"name": "manual-app"}},
+            {"metadata": {"name": "auto-app"}},
+        ],
+    )
+    monkeypatch.setattr(offhours, "get_deployments", lambda namespace: ["api"])
+    monkeypatch.setattr(
+        offhours,
+        "get_deployment",
+        lambda namespace, deploy: {
+            "metadata": {
+                "labels": {"argocd.argoproj.io/instance": "auto-app"},
+                "annotations": {},
+            }
+        },
+    )
+    monkeypatch.setattr(
+        offhours,
+        "kubectl_get",
+        lambda kind, namespace=None, selector=None, name=None: {
+            "metadata": {"annotations": {"offhours.platform.io/argopp": "manual-app"}}
+        },
+    )
+
+    apps = offhours.get_argocd_apps_from_namespace("ns")
+
+    assert apps == {"manual-app"}
 
 
 def test_shutdown_namespace_strict_mode_blocks_mixed_app(monkeypatch):
