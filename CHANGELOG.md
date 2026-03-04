@@ -4,6 +4,42 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog.
 
+## [0.2.0] - 2026-03-04
+
+### Added
+
+- Runtime caches in `scripts/offhours.py` to reduce repeated Kubernetes/Argo API calls:
+  - deployment list cache per namespace.
+  - deployment object cache by `(namespace, name)`.
+  - namespace object cache.
+  - Argo app list/app object cache.
+  - protected deployment cache per namespace.
+  - deployment owner index (`deployment -> app`) per namespace.
+- Tests for manual discovery precedence and strict-mode behavior in startup flow.
+
+### Changed
+
+- Argo discovery controls simplified from 4 flags to 2 flags:
+  - `ARGO_DISCOVERY_USE_AUTOMATIC`
+  - `ARGO_DISCOVERY_USE_MANUAL`
+- Discovery precedence updated:
+  - manual override (`offhours.platform.io/argopp`) first when manual mode is enabled.
+  - automatic chain (`instance`, `tracking-id`, destination namespace fallback) after manual.
+- Startup behavior aligned with strict mode:
+  - with `PROTECTED_APP_STRICT_MODE=true`, apps with protected deployments are not resumed/synced.
+- Documentation updated across `README.MD` and `docs/` to reflect:
+  - new discovery model.
+  - strict mode behavior in both shutdown and startup.
+  - Argo scenario manifests currently used (`scenario-3` and `scenario-4`).
+- CI updated to publish Docker `latest` on pushes to `main/master` (in addition to SHA tag).
+
+### Fixed
+
+- Argo API patch payload for application pause/resume:
+  - requests now send `patchType` in body with merge patch payload expected by Argo API.
+- Scenario 3 manifest/docs alignment for manual `argopp` override usage.
+- Script/docs consistency and readability improvements (docstrings, comments, line-length lint issues).
+
 ## [0.1.0] - 2026-02-28
 
 ### Added
