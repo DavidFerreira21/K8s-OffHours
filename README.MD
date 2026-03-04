@@ -42,6 +42,14 @@ Modo GitOps:
 
 - `ARGO_ENABLED=true`: integra com Argo CD (API), pausa/reativa sync
 - `ARGO_ENABLED=false`: atua apenas em Kubernetes
+- descoberta de app Argo:
+  - `ARGO_DISCOVERY_USE_MANUAL=true`: usa override `offhours.platform.io/argopp` (prioridade 1)
+  - `ARGO_DISCOVERY_USE_AUTOMATIC=true`: usa cadeia automatica (`instance`, `tracking-id`, fallback por destination namespace)
+
+Com `PROTECTED_APP_STRICT_MODE=true`:
+
+- no `shutdown`, app com qualquer deployment protegido nao e pausada e nao tem deployments escalados
+- no `startup`, essa app tambem nao recebe `resume/sync`
 
 Detalhes de arquitetura e fluxo interno: [architecture.md](docs/architecture.md).
 Detalhes de modos e variaveis: [configuration.md](docs/configuration.md).
@@ -90,6 +98,8 @@ Defina variaveis em `k8s/base/config.yaml` (ConfigMap/Secret), principalmente:
 - `DRY_RUN`
 - `DEFAULT_STARTUP_REPLICAS`
 - `PROTECTED_APP_STRICT_MODE`
+- `ARGO_DISCOVERY_USE_AUTOMATIC`
+- `ARGO_DISCOVERY_USE_MANUAL`
 - `ARGO_SERVER` e `ARGO_TOKEN` (se `ARGO_ENABLED=true`)
 
 Exemplo pratico de configuracao no ConfigMap:
@@ -99,6 +109,8 @@ data:
   SCHEDULE_NAME: "dev"
   SCHEDULE_SCOPE: "namespace"
   ARGO_ENABLED: "false"
+  ARGO_DISCOVERY_USE_AUTOMATIC: "true"
+  ARGO_DISCOVERY_USE_MANUAL: "false"
   DRY_RUN: "false"
   DEFAULT_STARTUP_REPLICAS: "1"
   PROTECTED_APP_STRICT_MODE: "true"

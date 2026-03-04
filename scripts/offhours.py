@@ -852,7 +852,10 @@ def handle_startup_deployment_scope() -> None:
                 env_bool("PROTECTED_APP_STRICT_MODE", True)
                 and (namespace, app) in strict_blocked_keys
             ):
-                log(f"Strict mode: skipping startup resume/sync for app {app} in namespace {namespace}")
+                log(
+                    "Strict mode: skipping startup resume/sync for app "
+                    f"{app} in namespace {namespace}"
+                )
                 continue
             argo_resume_and_sync_app(app)
         return
