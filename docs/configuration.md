@@ -55,6 +55,6 @@ metadata:
 
 ```yaml
 metadata:
-  labels:
+  annotations:
     offhours.platform.io/argopp: "smb-app,billing-app"
 ```

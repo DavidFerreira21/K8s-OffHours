@@ -3,8 +3,7 @@ kind: Namespace
 metadata:
   name: app-dev-argopp
   labels:
-    offhours.platform.io/schedule: "dev-weekday"
-    offhours.platform.io/argopp: "smb-app,billing-app"
+    offhours.platform.io/schedule: "dev"
 ---
 apiVersion: apps/v1
 kind: Deployment

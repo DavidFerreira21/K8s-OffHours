@@ -9,6 +9,14 @@ kubectl apply -f k8s/examples/scenarios/scenario-3-argopp-override.yaml
 kubectl apply -f k8s/examples/scenarios/scenario-4-mixed-protected-app.yaml
 ```
 
+Aplicar os 4 cenarios via Argo CD (um Application):
+
+```bash
+kubectl apply -f k8s/examples/scenarios/argocd-application-scenarios.yaml
+```
+
+Antes de aplicar, ajuste `spec.source.repoURL` no arquivo `k8s/examples/scenarios/argocd-application-scenarios.yaml`.
+
 Regra base para todos os cenarios:
 
 - `SCHEDULE_NAME` deve ser exatamente igual ao valor da label `offhours.platform.io/schedule` usada no alvo.

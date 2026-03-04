@@ -6,13 +6,13 @@ metadata:
 data:
   SCHEDULE_NAME: dev
   SCHEDULE_SCOPE: "namespace"
-  ARGO_ENABLED: "false"
-  VERBOSE: "false"
+  ARGO_ENABLED: "true"
+  VERBOSE: "true"
   DRY_RUN: "false"
   DEFAULT_STARTUP_REPLICAS: "1"
   PROTECTED_APP_STRICT_MODE: "true"
-  ARGO_SCHEME: "https"
-  ARGO_INSECURE: "false"
+  ARGO_SCHEME: "http"
+  ARGO_INSECURE: "true"
   ARGO_DISCOVERY_USE_INSTANCE_LABEL: "true"
   ARGO_DISCOVERY_USE_TRACKING_ID: "true"
   ARGO_DISCOVERY_USE_ARGOPP: "false"
@@ -28,5 +28,5 @@ metadata:
   namespace: offhours-system
 type: Opaque
 stringData:
-  ARGO_SERVER: ""
-  ARGO_TOKEN: ""
+  ARGO_SERVER: "argocd.davidferreira.blog:80"
+  ARGO_TOKEN: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJhcmdvY2QiLCJzdWIiOiJvZmZob3VyczphcGlLZXkiLCJuYmYiOjE3NzI1ODY1ODIsImlhdCI6MTc3MjU4NjU4MiwianRpIjoiZThlZjgzNGMtMjI2Ni00ZGU5LTliZDAtZjU5Zjg2M2M0ZTY2In0.NHJMWJAvYX-9Bm5kw7JGJGK2aNwI0huCB_yhWiqej4k"

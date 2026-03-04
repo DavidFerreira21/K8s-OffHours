@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: offhours-scenario-3
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DavidFerreira21/K8s-offhours.git
+    targetRevision: main
+    path: k8s/examples/scenarios
+    directory:
+      recurse: true
+      include: scenario-3-argopp-override.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

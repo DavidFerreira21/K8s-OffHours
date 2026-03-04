@@ -35,11 +35,19 @@ kubectl -n argocd patch configmap argocd-cm --type merge -p '{
 ### 2) Aplicar RBAC minimo
 
 ```bash
-kubectl -n argocd patch configmap argocd-rbac-cm --type merge -p '{
-  "data": {
-    "policy.csv": "p, role:offhours-global, applications, get, */*, allow\\np, role:offhours-global, applications, update, */*, allow\\np, role:offhours-global, applications, sync, */*, allow\\ng, offhours, role:offhours-global"
-  }
-}'
+cat <<'EOF' | kubectl apply -f -
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: argocd
+data:
+  policy.csv: |
+    p, role:offhours-global, applications, get, */*, allow
+    p, role:offhours-global, applications, update, */*, allow
+    p, role:offhours-global, applications, sync, */*, allow
+    g, offhours, role:offhours-global
+EOF
 ```
 
 ### 3) Reiniciar Argo server
