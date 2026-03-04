@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "k8s-offhours.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "k8s-offhours.labels" . | nindent 4 }}
+data:
+  SCHEDULE_NAME: {{ .Values.config.scheduleName | quote }}
+  SCHEDULE_SCOPE: {{ .Values.config.scheduleScope | quote }}
+  ARGO_ENABLED: {{ ternary "true" "false" .Values.argocd.enabled | quote }}
+  VERBOSE: {{ ternary "true" "false" .Values.config.verbose | quote }}
+  DRY_RUN: {{ ternary "true" "false" .Values.config.dryRun | quote }}
+  DEFAULT_STARTUP_REPLICAS: {{ .Values.config.defaultStartupReplicas | quote }}
+  PROTECTED_APP_STRICT_MODE: {{ ternary "true" "false" .Values.config.protectedAppStrictMode | quote }}
+  ARGO_SCHEME: {{ .Values.config.argoScheme | quote }}
+  ARGO_INSECURE: {{ ternary "true" "false" .Values.config.argoInsecure | quote }}
+  ARGO_DISCOVERY_USE_AUTOMATIC: {{ ternary "true" "false" .Values.config.argoDiscoveryUseAutomatic | quote }}
+  ARGO_DISCOVERY_USE_MANUAL: {{ ternary "true" "false" .Values.config.argoDiscoveryUseManual | quote }}
+  ARGO_API_RETRIES: {{ .Values.config.argoApiRetries | quote }}
+  ARGO_API_RETRY_BASE_SECONDS: {{ .Values.config.argoApiRetryBaseSeconds | quote }}
+  ARGO_API_RETRY_MAX_SECONDS: {{ .Values.config.argoApiRetryMaxSeconds | quote }}

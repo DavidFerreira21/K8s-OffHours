@@ -164,6 +164,28 @@ kubectl apply -k k8s/base
 
 Passo a passo detalhado de deploy: [deploy.md](docs/deploy.md).
 
+### Alternativa: instalar via Helm
+
+Sem Argo (padrao):
+
+```bash
+helm upgrade --install offhours ./helm/k8s-offhours \
+  -n offhours-system --create-namespace
+```
+
+Com Argo:
+
+```bash
+kubectl -n offhours-system create secret generic offhours-argocd \
+  --from-literal=ARGO_SERVER='argocd-server.argocd.svc.cluster.local:80' \
+  --from-literal=ARGO_TOKEN='<token>'
+
+helm upgrade --install offhours ./helm/k8s-offhours \
+  -n offhours-system --create-namespace \
+  --set argocd.enabled=true \
+  --set argocd.existingSecret=offhours-argocd
+```
+
 ### 5) Testar manualmente antes de operar por schedule
 
 Shutdown manual:

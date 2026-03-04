@@ -1,0 +1,67 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "k8s-offhours.fullname" . }}-shutdown
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "k8s-offhours.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.schedule.shutdown | quote }}
+  timeZone: {{ .Values.schedule.timeZone | quote }}
+  successfulJobsHistoryLimit: {{ .Values.schedule.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.schedule.failedJobsHistoryLimit }}
+  concurrencyPolicy: {{ .Values.schedule.concurrencyPolicy }}
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: {{ include "k8s-offhours.serviceAccountName" . }}
+          restartPolicy: OnFailure
+          containers:
+            - name: offhours
+              image: {{ printf "%s:%s" .Values.image.repository .Values.image.tag | quote }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              envFrom:
+                - configMapRef:
+                    name: {{ include "k8s-offhours.fullname" . }}-config
+                {{- if .Values.argocd.enabled }}
+                - secretRef:
+                    name: {{ include "k8s-offhours.argocdSecretName" . }}
+                {{- end }}
+              env:
+                - name: ACTION
+                  value: shutdown
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "k8s-offhours.fullname" . }}-startup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "k8s-offhours.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.schedule.startup | quote }}
+  timeZone: {{ .Values.schedule.timeZone | quote }}
+  successfulJobsHistoryLimit: {{ .Values.schedule.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.schedule.failedJobsHistoryLimit }}
+  concurrencyPolicy: {{ .Values.schedule.concurrencyPolicy }}
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: {{ include "k8s-offhours.serviceAccountName" . }}
+          restartPolicy: OnFailure
+          containers:
+            - name: offhours
+              image: {{ printf "%s:%s" .Values.image.repository .Values.image.tag | quote }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              envFrom:
+                - configMapRef:
+                    name: {{ include "k8s-offhours.fullname" . }}-config
+                {{- if .Values.argocd.enabled }}
+                - secretRef:
+                    name: {{ include "k8s-offhours.argocdSecretName" . }}
+                {{- end }}
+              env:
+                - name: ACTION
+                  value: startup

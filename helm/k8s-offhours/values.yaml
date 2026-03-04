@@ -1,0 +1,46 @@
+nameOverride: ""
+fullnameOverride: ""
+
+namespace:
+  create: false
+
+image:
+  repository: david210/k8s-offhours
+  tag: latest
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  name: ""
+
+rbac:
+  create: true
+
+schedule:
+  shutdown: "0 20 * * 1-5"
+  startup: "0 8 * * 1-5"
+  timeZone: "America/Sao_Paulo"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+
+config:
+  scheduleName: dev
+  scheduleScope: namespace
+  verbose: true
+  dryRun: false
+  defaultStartupReplicas: 1
+  protectedAppStrictMode: true
+  argoScheme: https
+  argoInsecure: true
+  argoDiscoveryUseAutomatic: true
+  argoDiscoveryUseManual: false
+  argoApiRetries: 2
+  argoApiRetryBaseSeconds: 0.2
+  argoApiRetryMaxSeconds: 1.0
+
+argocd:
+  enabled: false
+  # Required when argocd.enabled=true
+  # Must contain keys: ARGO_SERVER and ARGO_TOKEN
+  existingSecret: ""
