@@ -18,7 +18,7 @@ spec:
           containers:
             - name: offhours
               image: david210/k8s-offhours:latest
-              imagePullPolicy: IfNotPresent
+              imagePullPolicy: Always
               envFrom:
                 - configMapRef:
                     name: offhours-config

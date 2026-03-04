@@ -9,13 +9,12 @@ kubectl apply -f k8s/examples/scenarios/scenario-3-argopp-override.yaml
 kubectl apply -f k8s/examples/scenarios/scenario-4-mixed-protected-app.yaml
 ```
 
-Aplicar os 4 cenarios via Argo CD (um Application):
+Aplicar cenarios Argo (somente scenario 3 e 4):
 
 ```bash
-kubectl apply -f k8s/examples/scenarios/argocd-application-scenarios.yaml
+kubectl apply -f k8s/examples/argo/argocd-application-scenario-3.yaml
+kubectl apply -f k8s/examples/argo/argocd-application-scenario-4.yaml
 ```
-
-Antes de aplicar, ajuste `spec.source.repoURL` no arquivo `k8s/examples/scenarios/argocd-application-scenarios.yaml`.
 
 Regra base para todos os cenarios:
 
@@ -144,7 +143,8 @@ data:
 
 Resultado esperado:
 
-- se a app tiver qualquer deployment protegido, a app nao e pausada e nenhum deployment da app e escalado
+- no `shutdown`: se a app tiver qualquer deployment protegido, a app nao e pausada e nenhum deployment da app e escalado
+- no `startup`: essa app tambem nao recebe `resume/sync`
 
 ### Modo agressivo
 

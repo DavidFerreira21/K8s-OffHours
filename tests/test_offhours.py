@@ -15,6 +15,7 @@ SPEC.loader.exec_module(offhours)
 
 @pytest.fixture(autouse=True)
 def clear_env(monkeypatch):
+    offhours.reset_runtime_caches()
     keys = [
         "SCHEDULE_NAME",
         "ACTION",
@@ -173,6 +174,21 @@ def test_shutdown_namespace_strict_mode_blocks_mixed_app(monkeypatch):
     assert paused == []
     assert saved == []
     assert scaled == []
+
+
+def test_startup_namespace_strict_mode_blocks_mixed_app_resume(monkeypatch):
+    monkeypatch.setenv("ARGO_ENABLED", "true")
+    monkeypatch.setenv("PROTECTED_APP_STRICT_MODE", "true")
+
+    monkeypatch.setattr(offhours, "get_argocd_apps_from_namespace", lambda namespace: {"app-main"})
+    monkeypatch.setattr(offhours, "app_has_protected_deployment", lambda app, namespace: True)
+
+    resumed = []
+    monkeypatch.setattr(offhours, "argo_resume_and_sync_app", lambda app: resumed.append(app))
+
+    offhours.handle_startup_namespace("ns")
+
+    assert resumed == []
 
 
 def test_argo_request_mutate_respects_dry_run(monkeypatch):

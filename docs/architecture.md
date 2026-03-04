@@ -58,7 +58,9 @@ Defaults recomendados:
 
 ### Protecao em apps mistas (`PROTECTED_APP_STRICT_MODE`)
 
-- `true` (recomendado): se uma app tiver deployment protegido, nao pausa sync nem escala deployments da app
+- `true` (recomendado):
+  - no `shutdown`, se uma app tiver deployment protegido, nao pausa sync nem escala deployments da app
+  - no `startup`, essa app tambem nao recebe `resume/sync`
 - `false`: pausa sync da app e escala apenas deployments nao protegidos
 
 ### Modo sem Argo (`ARGO_ENABLED=false`)
