@@ -25,6 +25,21 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@v4
 
+      - name: Ensure GitHub Pages branch exists
+        run: |
+          if ! git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git config user.name "github-actions[bot]"
+            git checkout --orphan gh-pages
+            git rm -rf . || true
+            git clean -fdx
+            touch .gitkeep
+            git add .gitkeep
+            git commit -m "chore: create gh-pages branch for Helm index"
+            git push origin gh-pages
+            git checkout -
+          fi
+
       - name: Run chart-releaser
         uses: helm/chart-releaser-action@v1.6.0
         with:
