@@ -507,8 +507,11 @@ def argo_pause_app(app_name: str) -> None:
     quoted = parse.quote(app_name, safe="")
     argo_request(
         "PATCH",
-        f"/api/v1/applications/{quoted}?patchType=merge",
-        {"patch": json.dumps({"spec": {"syncPolicy": None}})},
+        f"/api/v1/applications/{quoted}",
+        {
+            "patchType": "merge",
+            "patch": json.dumps({"spec": {"syncPolicy": None}}),
+        },
         mutate=True,
     )
     log(f"Argo CD application paused: {app_name}")
@@ -519,8 +522,11 @@ def argo_resume_and_sync_app(app_name: str) -> None:
     quoted = parse.quote(app_name, safe="")
     argo_request(
         "PATCH",
-        f"/api/v1/applications/{quoted}?patchType=merge",
-        {"patch": json.dumps({"spec": {"syncPolicy": {"automated": {}}}})},
+        f"/api/v1/applications/{quoted}",
+        {
+            "patchType": "merge",
+            "patch": json.dumps({"spec": {"syncPolicy": {"automated": {}}}}),
+        },
         mutate=True,
     )
     argo_request(
