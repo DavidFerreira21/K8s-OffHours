@@ -25,7 +25,7 @@ schedule:
   concurrencyPolicy: Forbid
 
 config:
-  scheduleName: dev
+  scheduleName: default
   scheduleScope: namespace
   verbose: true
   dryRun: false

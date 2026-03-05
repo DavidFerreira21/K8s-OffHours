@@ -67,7 +67,7 @@ Detalhes de custo e como obter economia real: [cost-optimization.md](docs/cost-o
 
 ## Como usar em ambiente real
 
-### 1) Instalar via Helm (metodo principal)
+### 1) Instalar via Helm
 
 Adicionar repo Helm publicado no GitHub Pages:
 
@@ -82,7 +82,7 @@ Instalar sem Argo CD (padrao):
 ```bash
 helm upgrade --install offhours k8s-offhours/k8s-offhours \
   -n offhours-system --create-namespace \
-  --version 0.2.3
+  --version 0.2.1
 ```
 
 Instalar com Argo CD:
@@ -94,7 +94,7 @@ kubectl -n offhours-system create secret generic offhours-argocd \
 
 helm upgrade --install offhours k8s-offhours/k8s-offhours \
   -n offhours-system --create-namespace \
-  --version 0.2.3 \
+  --version 0.2.1 \
   --set argocd.enabled=true \
   --set argocd.existingSecret=offhours-argocd
 ```
