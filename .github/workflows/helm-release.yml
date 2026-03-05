@@ -37,7 +37,7 @@ jobs:
             git add .gitkeep
             git commit -m "chore: create gh-pages branch for Helm index"
             git push origin gh-pages
-            git checkout -
+            git checkout --force "$GITHUB_SHA"
           fi
 
       - name: Configure git identity for chart-releaser
