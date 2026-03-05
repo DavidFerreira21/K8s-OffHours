@@ -1,0 +1,33 @@
+K8s OffHours instalado com sucesso.
+
+Release:
+  {{ .Release.Name }}
+Namespace:
+  {{ .Release.Namespace }}
+
+Recursos principais:
+  - CronJob shutdown: {{ include "k8s-offhours.fullname" . }}-shutdown
+  - CronJob startup:  {{ include "k8s-offhours.fullname" . }}-startup
+  - ConfigMap:        {{ include "k8s-offhours.fullname" . }}-config
+{{- if .Values.argocd.enabled }}
+  - Argo secret:      {{ include "k8s-offhours.argocdSecretName" . }}
+{{- end }}
+
+Verificar recursos:
+  kubectl -n {{ .Release.Namespace }} get cronjob,configmap,serviceaccount
+
+Teste manual (shutdown):
+  kubectl -n {{ .Release.Namespace }} delete job manual-shutdown --ignore-not-found
+  kubectl -n {{ .Release.Namespace }} create job --from=cronjob/{{ include "k8s-offhours.fullname" . }}-shutdown manual-shutdown
+  kubectl -n {{ .Release.Namespace }} logs -f job/manual-shutdown
+
+Teste manual (startup):
+  kubectl -n {{ .Release.Namespace }} delete job manual-startup --ignore-not-found
+  kubectl -n {{ .Release.Namespace }} create job --from=cronjob/{{ include "k8s-offhours.fullname" . }}-startup manual-startup
+  kubectl -n {{ .Release.Namespace }} logs -f job/manual-startup
+
+Para ajustar configuracao:
+  helm upgrade {{ .Release.Name }} {{ .Chart.Name }} \
+    -n {{ .Release.Namespace }} \
+    --reuse-values \
+    --set config.scheduleName=<schedule>

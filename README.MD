@@ -82,8 +82,14 @@ Instalar sem Argo CD (padrao):
 ```bash
 helm upgrade --install offhours k8s-offhours/k8s-offhours \
   -n offhours-system --create-namespace \
-  --version 0.2.1
+  --version 0.2.1 \
+  --set config.scheduleName=dev \
+  --set config.scheduleScope=namespace
 ```
+
+Observacao:
+- no chart, o `config.scheduleName` padrao e `default`
+- se seus namespaces/deployments usam `offhours.platform.io/schedule=dev`, ajuste `config.scheduleName=dev`
 
 Instalar com Argo CD:
 
@@ -95,6 +101,8 @@ kubectl -n offhours-system create secret generic offhours-argocd \
 helm upgrade --install offhours k8s-offhours/k8s-offhours \
   -n offhours-system --create-namespace \
   --version 0.2.1 \
+  --set config.scheduleName=dev \
+  --set config.scheduleScope=namespace \
   --set argocd.enabled=true \
   --set argocd.existingSecret=offhours-argocd
 ```
@@ -117,11 +125,17 @@ helm upgrade --install offhours ./helm/k8s-offhours \
 
 ### 2) Testar manualmente antes de operar por schedule
 
+Verifique os nomes dos CronJobs criados pelo Helm:
+
+```bash
+kubectl -n offhours-system get cronjob
+```
+
 Shutdown manual:
 
 ```bash
 kubectl -n offhours-system delete job manual-shutdown --ignore-not-found
-kubectl -n offhours-system create job --from=cronjob/offhours-shutdown manual-shutdown
+kubectl -n offhours-system create job --from=cronjob/offhours-k8s-offhours-shutdown manual-shutdown
 kubectl -n offhours-system logs -f job/manual-shutdown
 ```
 
@@ -129,7 +143,7 @@ Startup manual:
 
 ```bash
 kubectl -n offhours-system delete job manual-startup --ignore-not-found
-kubectl -n offhours-system create job --from=cronjob/offhours-startup manual-startup
+kubectl -n offhours-system create job --from=cronjob/offhours-k8s-offhours-startup manual-startup
 kubectl -n offhours-system logs -f job/manual-startup
 ```
 
@@ -149,6 +163,8 @@ Roteiro de cenarios de validacao: [scenarios.md](docs/scenarios.md).
 ├── .env.example
 ├── scripts/
 │   └── offhours.py
+├── helm/
+│   └── k8s-offhours/
 ├── docs/
 │   ├── architecture.md
 │   ├── configuration.md
