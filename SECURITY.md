@@ -1,44 +1,22 @@
 # Politica de Seguranca
 
-## Versoes com suporte
+## Reporte de vulnerabilidades
 
-Correcos de seguranca sao priorizadas para a versao mais recente de:
+Nao abra issue publica para reportar vulnerabilidade.
 
-- Helm chart (`helm/k8s-offhours`)
-- Base Kubernetes manifests (`k8s/base`)
-- Python runtime script (`scripts/offhours.py`)
-
-## Como reportar uma vulnerabilidade
-
-Nao reporte vulnerabilidades de seguranca em issues publicas do GitHub.
-
-Use um destes canais privados:
+Use:
 
 1. GitHub Security Advisories (preferencial):
    `Security` -> `Report a vulnerability`
-2. Se Security Advisories nao estiver disponivel, contate os mantenedores em
-   canal privado e compartilhe:
-   - impacto e severidade
-   - passos de reproducao
-   - versoes afetadas
-   - mitigacao sugerida (se conhecida)
+2. Se nao for possivel, contate os mantenedores em canal privado.
 
-## O que esperar
+## Informacoes minimas no reporte
 
-- Resposta inicial de triagem: ate 5 dias uteis
-- Confirmacao e classificacao de severidade apos reproducao
-- Correcao planejada conforme severidade e janela de release
-- Divulgacao publica apos disponibilizacao da mitigacao
+- Descricao do problema
+- Impacto esperado
+- Passos para reproducao
+- Versao afetada
 
-## Escopo
+## Resposta
 
-Exemplos em escopo:
-
-- escalacao de privilegio via RBAC/manifests
-- exposicao de token ou secret
-- configuracao padrao insegura com risco ao dado/control plane
-
-Fora de escopo:
-
-- solicitacoes de suporte ou duvidas de uso (use Issues/Discussions)
-- vulnerabilidades de terceiros sem possibilidade de correcao no projeto
+Fazemos triagem inicial em ate 5 dias uteis e seguimos com correcoes conforme severidade.
