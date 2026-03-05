@@ -9,7 +9,7 @@ metadata:
   name: checkout-api
   namespace: app-dev-deploy-scope
   labels:
-    offhours.platform.io/schedule: "testing"
+    offhours.platform.io/schedule: "default"
 spec:
   replicas: 2
   selector:
@@ -33,7 +33,7 @@ metadata:
   namespace: app-dev-deploy-scope
   labels:
     app.kubernetes.io/name: billing-worker
-    offhours.platform.io/schedule: "dev"
+    offhours.platform.io/schedule: "default"
   annotations:
     offhours.platform.io/protected: "true"
 spec:
