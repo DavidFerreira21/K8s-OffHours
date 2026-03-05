@@ -4,3 +4,4 @@ description: Helm chart for K8s OffHours CronJobs
 version: 0.2.1
 appVersion: "0.2.1"
 type: application
+
