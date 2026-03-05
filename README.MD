@@ -1,7 +1,12 @@
 # K8s OffHours
 
-K8s OffHours is a safe, GitOps-friendly toolkit for automated off-hours scaling of Kubernetes workloads.
-Toolkit seguro e GitOps-friendly para escalonamento automatico de workloads Kubernetes fora do horario comercial.
+![Helm](https://img.shields.io/badge/helm-chart-blue)
+![Docker](https://img.shields.io/badge/docker-image-2496ED?logo=docker&logoColor=white)
+![License](https://img.shields.io/github/license/DavidFerreira21/K8s-OffHours)
+
+Helm repo: https://davidferreira21.github.io/K8s-OffHours
+
+K8s OffHours e uma solucao nativa para Kubernetes que automatiza o desligamento e religamento de workloads fora do horario comercial, reduzindo custos de infraestrutura com seguranca em ambientes nao produtivos.
 
 ## O que a solucao resolve
 
@@ -54,6 +59,39 @@ Com `PROTECTED_APP_STRICT_MODE=true`:
 Detalhes de arquitetura e fluxo interno: [architecture.md](docs/architecture.md).
 Detalhes de modos e variaveis: [configuration.md](docs/configuration.md).
 Guia tecnico Argo CD (usuario, token e RBAC): [argocd-offhours-user.md](docs/argocd-offhours-user.md).
+
+## Architecture Overview
+
+```text
+Helm chart
+   ↓
+CronJobs (shutdown/startup)
+   ↓
+Python engine (offhours.py)
+   ↓
+Kubernetes API
+   ↓
+Argo CD API (optional)
+```
+
+Fluxo simplificado de shutdown:
+
+```text
+CronJob shutdown
+      ↓
+Scale deployments -> 0
+      ↓
+Node autoscaler remove nodes (when enabled)
+```
+
+## Quando usar
+
+Recomendado para:
+
+- clusters de desenvolvimento
+- ambientes de staging
+- ambientes de HML
+
 
 ## Observacoes importantes
 
