@@ -67,96 +67,7 @@ Detalhes de custo e como obter economia real: [cost-optimization.md](docs/cost-o
 
 ## Como usar em ambiente real
 
-### 1) Build e publicacao da imagem
-
-Build da imagem:
-
-```bash
-docker build -t <registry>/k8s-offhours:<tag> .
-```
-
-Push para o registry:
-
-```bash
-docker push <registry>/k8s-offhours:<tag>
-```
-
-Opcoes de build/deploy (kind, registry, multi-window): [deploy.md](docs/deploy.md).
-
-### 2) Ajustar manifests base
-
-Atualize a imagem nos CronJobs:
-
-- `k8s/base/cronjob-shutdown.yaml`
-- `k8s/base/cronjob-startup.yaml`
-
-Defina variaveis em `k8s/base/config.yaml` (ConfigMap/Secret), principalmente:
-
-- `SCHEDULE_NAME`
-- `SCHEDULE_SCOPE`
-- `ARGO_ENABLED`
-- `DRY_RUN`
-- `DEFAULT_STARTUP_REPLICAS`
-- `PROTECTED_APP_STRICT_MODE`
-- `ARGO_DISCOVERY_USE_AUTOMATIC`
-- `ARGO_DISCOVERY_USE_MANUAL`
-- `ARGO_SERVER` e `ARGO_TOKEN` (se `ARGO_ENABLED=true`)
-
-Exemplo pratico de configuracao no ConfigMap:
-
-```yaml
-data:
-  SCHEDULE_NAME: "dev"
-  SCHEDULE_SCOPE: "namespace"
-  ARGO_ENABLED: "false"
-  ARGO_DISCOVERY_USE_AUTOMATIC: "true"
-  ARGO_DISCOVERY_USE_MANUAL: "false"
-  DRY_RUN: "false"
-  DEFAULT_STARTUP_REPLICAS: "1"
-  PROTECTED_APP_STRICT_MODE: "true"
-```
-
-
-Ajuste horarios dos CronJobs:
-
-- `spec.schedule`
-- `spec.timeZone`
-
-Referencia completa de variaveis e modos: [configuration.md](docs/configuration.md).
-
-### 3) Marcar os alvos
-
-Se `SCHEDULE_SCOPE=namespace`, aplique label nos namespaces:
-
-```yaml
-metadata:
-  labels:
-    offhours.platform.io/schedule: "dev"
-```
-
-Nesse caso, configure `SCHEDULE_NAME=dev`.
-
-Se `SCHEDULE_SCOPE=deployment`, aplique label nos deployments:
-
-```yaml
-metadata:
-  labels:
-    offhours.platform.io/schedule: "dev"
-```
-
-Nesse caso, configure `SCHEDULE_NAME=dev`.
-
-Para proteger deployment critico:
-
-```yaml
-metadata:
-  annotations:
-    offhours.platform.io/protected: "true"
-```
-
-Mais exemplos de labels/annotations e descoberta de apps: [configuration.md](docs/configuration.md).
-
-### 4) Instalar no cluster (metodo principal: Helm)
+### 1) Instalar via Helm (metodo principal)
 
 Adicionar repo Helm publicado no GitHub Pages:
 
@@ -204,15 +115,7 @@ helm upgrade --install offhours ./helm/k8s-offhours \
   -n offhours-system --create-namespace
 ```
 
-### Metodo manual (manifests base)
-
-```bash
-kubectl apply -k k8s/base
-```
-
-Passo a passo detalhado de deploy: [deploy.md](docs/deploy.md).
-
-### 5) Testar manualmente antes de operar por schedule
+### 2) Testar manualmente antes de operar por schedule
 
 Shutdown manual:
 
@@ -231,6 +134,11 @@ kubectl -n offhours-system logs -f job/manual-startup
 ```
 
 Roteiro de cenarios de validacao: [scenarios.md](docs/scenarios.md).
+
+### Fluxos legados e avancados
+
+- Deploy manual com manifests base (`kubectl apply -k`) e opcoes avancadas: [deploy.md](docs/deploy.md)
+- Referencia completa de variaveis e modos: [configuration.md](docs/configuration.md)
 
 ## Estrutura do repositorio
 
