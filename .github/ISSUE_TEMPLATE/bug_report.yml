@@ -1,0 +1,72 @@
+name: Reportar bug
+description: Reporte um problema reproduzivel no codigo, chart ou manifests.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por reportar este bug. Inclua detalhes suficientes para reproducao.
+  - type: input
+    id: version
+    attributes:
+      label: Versao
+      description: Versao do chart/app ou commit SHA.
+      placeholder: "0.2.1 ou commit SHA"
+    validations:
+      required: true
+  - type: dropdown
+    id: install_mode
+    attributes:
+      label: Modo de instalacao
+      options:
+        - Helm
+        - Manifests Kustomize
+        - Outro
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Ambiente
+      description: Versao do Kubernetes, cloud/on-prem, autoscaler, uso de Argo.
+      placeholder: "K8s 1.30, EKS, Karpenter, Argo desabilitado"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Passos para reproduzir
+      placeholder: |
+        1. Configure ...
+        2. Execute ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamento esperado
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Comportamento atual
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs/saidas relevantes
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Validacoes previas
+      options:
+        - label: Eu pesquisei issues existentes antes de abrir esta.
+          required: true
+        - label: Eu removi dados sensiveis (tokens/secrets) dos logs.
+          required: true

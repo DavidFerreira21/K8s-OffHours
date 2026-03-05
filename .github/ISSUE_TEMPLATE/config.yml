@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Reportar seguranca (privado)
+    url: https://github.com/DavidFerreira21/K8s-OffHours/security/advisories/new
+    about: Reporte vulnerabilidades de seguranca em canal privado.

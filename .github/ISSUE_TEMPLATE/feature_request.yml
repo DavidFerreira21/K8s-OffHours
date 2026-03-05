@@ -1,0 +1,41 @@
+name: Solicitar melhoria
+description: Proponha uma melhoria para o K8s OffHours.
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Descreva claramente o problema e o resultado esperado.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema a resolver
+      description: Qual limitacao voce enfrenta hoje?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Solucao proposta
+      description: Qual comportamento ou API deve ser adicionado/alterado?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+      description: Outras abordagens que voce avaliou.
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impacto e riscos
+      description: Retrocompatibilidade, impacto operacional e necessidade de migracao.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Validacoes previas
+      options:
+        - label: Eu pesquisei issues/PRs existentes antes de abrir esta solicitacao.
+          required: true

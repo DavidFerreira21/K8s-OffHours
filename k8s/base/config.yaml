@@ -4,14 +4,14 @@ metadata:
   name: offhours-config
   namespace: offhours-system
 data:
-  SCHEDULE_NAME: "testing"
+  SCHEDULE_NAME: "default"
   SCHEDULE_SCOPE: "namespace"
-  ARGO_ENABLED: "true"
+  ARGO_ENABLED: "false"
   VERBOSE: "true"
   DRY_RUN: "false"
   DEFAULT_STARTUP_REPLICAS: "1"
   PROTECTED_APP_STRICT_MODE: "true"
-  ARGO_SCHEME: "http"
+  ARGO_SCHEME: "https"
   ARGO_INSECURE: "true"
   ARGO_DISCOVERY_USE_AUTOMATIC: "true"
   ARGO_DISCOVERY_USE_MANUAL: "false"
@@ -19,6 +19,9 @@ data:
   ARGO_API_RETRY_BASE_SECONDS: "0.2"
   ARGO_API_RETRY_MAX_SECONDS: "1.0"
 ---
+
+# Lembrando que o nome do secret deve ser offhours-secrets, e as chaves ARGO_SERVER e ARGO_TOKEN são obrigatórias apenas quando ARGO_ENABLED=true
+# Abaixo e so um exemplo de como criar o secret, evite expor informações sensíveis em arquivos de configuração por questões de segurança.
 apiVersion: v1
 kind: Secret
 metadata:
@@ -26,5 +29,6 @@ metadata:
   namespace: offhours-system
 type: Opaque
 stringData:
-  ARGO_SERVER: "argocd.davidferreira.blog:80"
-  ARGO_TOKEN: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJhcmdvY2QiLCJzdWIiOiJvZmZob3VyczphcGlLZXkiLCJuYmYiOjE3NzI1ODY1ODIsImlhdCI6MTc3MjU4NjU4MiwianRpIjoiZThlZjgzNGMtMjI2Ni00ZGU5LTliZDAtZjU5Zjg2M2M0ZTY2In0.NHJMWJAvYX-9Bm5kw7JGJGK2aNwI0huCB_yhWiqej4k"
+  # Obrigatorio apenas quando ARGO_ENABLED=true
+  ARGO_SERVER: ""
+  ARGO_TOKEN: ""

@@ -161,6 +161,32 @@ helm upgrade --install offhours ./helm/k8s-offhours \
   -n offhours-system --create-namespace
 ```
 
+Multi-window com Helm (uma release por janela):
+
+```bash
+# janela dev-weekday
+helm upgrade --install offhours-dev k8s-offhours/k8s-offhours \
+  -n offhours-system --create-namespace \
+  --version 0.2.1 \
+  --set schedule.shutdown="0 20 * * 1-5" \
+  --set schedule.startup="0 8 * * 1-5" \
+  --set schedule.timeZone="America/Sao_Paulo" \
+  --set config.scheduleName="dev-weekday" \
+  --set config.scheduleScope="namespace" \
+  --set argocd.enabled=false
+
+# janela qa-weekday
+helm upgrade --install offhours-qa k8s-offhours/k8s-offhours \
+  -n offhours-system \
+  --version 0.2.1 \
+  --set schedule.shutdown="0 22 * * 1-5" \
+  --set schedule.startup="0 9 * * 1-5" \
+  --set schedule.timeZone="America/Sao_Paulo" \
+  --set config.scheduleName="qa-weekday" \
+  --set config.scheduleScope="namespace" \
+  --set argocd.enabled=false
+```
+
 ### 2) Testar manualmente antes de operar por schedule
 
 Verifique os nomes dos CronJobs criados pelo Helm:
@@ -186,6 +212,18 @@ kubectl -n offhours-system logs -f job/manual-startup
 ```
 
 Roteiro de cenarios de validacao: [scenarios.md](docs/scenarios.md).
+
+### 3) Aplicar label no alvo desejado (obrigatorio)
+
+Ao final da instalacao/configuracao, aplique a label com o mesmo valor de `scheduleName`:
+
+```bash
+# quando SCHEDULE_SCOPE=namespace
+kubectl label ns <namespace> offhours.platform.io/schedule=<schedule-name> --overwrite
+
+# quando SCHEDULE_SCOPE=deployment
+kubectl -n <namespace> label deploy <deployment> offhours.platform.io/schedule=<schedule-name> --overwrite
+```
 
 ### Fluxos legados e avancados
 
@@ -228,6 +266,13 @@ Se esta chegando agora, comece por: [docs/README.md](docs/README.md).
 - Otimizacao de custo e integracao com autoscaling de nos: [cost-optimization.md](docs/cost-optimization.md)
 - Cenarios de validacao: [scenarios.md](docs/scenarios.md)
 - Guia tecnico Argo CD (usuario/token/RBAC): [argocd-offhours-user.md](docs/argocd-offhours-user.md)
+
+## Governanca open source
+
+- Guia de contribuicao: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Codigo de conduta: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- Politica de seguranca: [SECURITY.md](SECURITY.md)
+- Guia de mantenedores (labels/milestones): [.github/MAINTAINER_GUIDE.md](.github/MAINTAINER_GUIDE.md)
 
 ## Licenca
 

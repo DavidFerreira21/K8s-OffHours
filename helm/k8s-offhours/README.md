@@ -35,3 +35,39 @@ helm upgrade --install offhours ./helm/k8s-offhours \
   --set argocd.enabled=true \
   --set argocd.existingSecret=offhours-argocd
 ```
+
+## Multi-window com Helm
+
+Cada release cria 1 par de CronJobs (`shutdown`/`startup`). Para multi-window, instale uma release por janela.
+
+```bash
+# janela dev-weekday
+helm upgrade --install offhours-dev ./helm/k8s-offhours \
+  -n offhours-system --create-namespace \
+  --set schedule.shutdown="0 20 * * 1-5" \
+  --set schedule.startup="0 8 * * 1-5" \
+  --set schedule.timeZone="America/Sao_Paulo" \
+  --set config.scheduleName="dev-weekday" \
+  --set config.scheduleScope="namespace" \
+  --set argocd.enabled=false
+
+# janela qa-weekday
+helm upgrade --install offhours-qa ./helm/k8s-offhours \
+  -n offhours-system \
+  --set schedule.shutdown="0 22 * * 1-5" \
+  --set schedule.startup="0 9 * * 1-5" \
+  --set schedule.timeZone="America/Sao_Paulo" \
+  --set config.scheduleName="qa-weekday" \
+  --set config.scheduleScope="namespace" \
+  --set argocd.enabled=false
+```
+
+Ao final, aplique a label no alvo desejado:
+
+```bash
+# quando SCHEDULE_SCOPE=namespace
+kubectl label ns <namespace> offhours.platform.io/schedule=<schedule-name> --overwrite
+
+# quando SCHEDULE_SCOPE=deployment
+kubectl -n <namespace> label deploy <deployment> offhours.platform.io/schedule=<schedule-name> --overwrite
+```
