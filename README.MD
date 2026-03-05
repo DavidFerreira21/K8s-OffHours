@@ -156,35 +156,61 @@ metadata:
 
 Mais exemplos de labels/annotations e descoberta de apps: [configuration.md](docs/configuration.md).
 
-### 4) Aplicar no cluster
+### 4) Instalar no cluster (metodo principal: Helm)
+
+Adicionar repo Helm publicado no GitHub Pages:
 
 ```bash
-kubectl apply -k k8s/base
+helm repo add k8s-offhours https://davidferreira21.github.io/K8s-OffHours
+helm repo update
+helm search repo k8s-offhours --versions
 ```
 
-Passo a passo detalhado de deploy: [deploy.md](docs/deploy.md).
-
-### Alternativa: instalar via Helm
-
-Sem Argo (padrao):
+Instalar sem Argo CD (padrao):
 
 ```bash
-helm upgrade --install offhours ./helm/k8s-offhours \
-  -n offhours-system --create-namespace
+helm upgrade --install offhours k8s-offhours/k8s-offhours \
+  -n offhours-system --create-namespace \
+  --version 0.2.3
 ```
 
-Com Argo:
+Instalar com Argo CD:
 
 ```bash
 kubectl -n offhours-system create secret generic offhours-argocd \
   --from-literal=ARGO_SERVER='argocd-server.argocd.svc.cluster.local:80' \
   --from-literal=ARGO_TOKEN='<token>'
 
-helm upgrade --install offhours ./helm/k8s-offhours \
+helm upgrade --install offhours k8s-offhours/k8s-offhours \
   -n offhours-system --create-namespace \
+  --version 0.2.3 \
   --set argocd.enabled=true \
   --set argocd.existingSecret=offhours-argocd
 ```
+
+Upgrade para nova versao do chart:
+
+```bash
+helm repo update
+helm upgrade offhours k8s-offhours/k8s-offhours \
+  -n offhours-system \
+  --version <nova-versao>
+```
+
+Instalacao local (desenvolvimento):
+
+```bash
+helm upgrade --install offhours ./helm/k8s-offhours \
+  -n offhours-system --create-namespace
+```
+
+### Metodo manual (manifests base)
+
+```bash
+kubectl apply -k k8s/base
+```
+
+Passo a passo detalhado de deploy: [deploy.md](docs/deploy.md).
 
 ### 5) Testar manualmente antes de operar por schedule
 
