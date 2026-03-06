@@ -17,6 +17,14 @@ Observacao: para validar economia real apos o deploy, veja [cost-optimization.md
 kubectl apply -k k8s/base
 ```
 
+Opcional (HPA de exemplo vinculado ao Scenario 1):
+
+```bash
+kubectl apply -f k8s/examples/scenarios/hpa-example.yaml
+```
+
+Se quiser reutilizar em outro workload, ajuste `namespace`, `scaleTargetRef.name`, `minReplicas` e `maxReplicas`.
+
 ## Opcao 2: Multiplas janelas (`k8s/base/multi-window`)
 
 ```bash

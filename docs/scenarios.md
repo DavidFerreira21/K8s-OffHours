@@ -56,6 +56,14 @@ kubectl -n offhours-system patch configmap offhours-config --type merge -p '{
 }'
 ```
 
+HPA de exemplo vinculado ao Scenario 1:
+
+```bash
+kubectl apply -f k8s/examples/scenarios/hpa-example.yaml
+```
+
+Este HPA aponta para `Deployment/api` no namespace `app-dev-ns-scope`.
+
 ## Scenario 2 - Deployment scope
 
 Arquivo: `k8s/examples/scenarios/scenario-2-deployment-scope.yaml`
