@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog.
 
+## [0.2.2] - 2026-03-06
+
+### Added
+
+- New HPA handling mode `HPA_DELETE_ONLY_ENABLED`:
+  - deletes matching HPA on `shutdown`.
+  - does not restore HPA on `startup`.
+  - emits strong warnings, including when used with `ARGO_ENABLED=false`.
+- Realistic deployment-scope HPA example:
+  - `k8s/examples/scenarios/hpa-scenario-2-checkout-api.yaml`
+  - includes CPU + memory metrics and scale behavior policies.
+- Additional test coverage for HPA mode precedence and delete-only behavior.
+
+### Changed
+
+- HPA lifecycle controls expanded and standardized:
+  - `HPA_MIN_ZERO_ENABLED` (best-effort `minReplicas=0` patch/restore).
+  - `HPA_DELETE_RESTORE_ENABLED` (save to technical ConfigMap, delete on shutdown, restore on startup).
+  - `HPA_DELETE_ONLY_ENABLED` (delete only, no restore).
+- Precedence rule updated:
+  - when `HPA_DELETE_ONLY_ENABLED=true` and `HPA_DELETE_RESTORE_ENABLED=true`, `HPA_DELETE_RESTORE_ENABLED` takes precedence.
+- Scenario 2 manifests improved for realism:
+  - `checkout-api` deployment now includes CPU/memory requests and limits.
+- Make targets `run-shutdown` and `run-startup` now work even when `./.env` is absent.
+- `.env.example` aligned with current runtime flags:
+  - discovery flags updated to `ARGO_DISCOVERY_USE_AUTOMATIC` / `ARGO_DISCOVERY_USE_MANUAL`.
+  - HPA mode flags added.
+
+### Fixed
+
+- RBAC expanded for HPA and HPA state operations:
+  - access to `horizontalpodautoscalers.autoscaling`.
+  - `configmaps` permissions required by delete-restore mode.
+- Shell parsing issue in env files:
+  - placeholder token changed from `<token>` to `""` to avoid `source` syntax errors.
+- Documentation consistency updates across:
+  - `README.MD`, `docs/configuration.md`, `docs/operations.md`, `docs/deploy.md`, `docs/scenarios.md`, and Helm chart README.
+
 ## [0.2.0] - 2026-03-04
 
 ### Added
