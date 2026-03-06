@@ -37,6 +37,11 @@ O script escala Deployment para `replicas=0`.
 
 Observacao: com metricas ativas, HPA pode redefinir replicas.
 
+Opcional:
+
+- `HPA_MIN_ZERO_ENABLED=true`: tenta patchar `minReplicas=0` no `shutdown` para HPAs que apontam para Deployments alvo e restaura o valor original no `startup`.
+- Se o patch falhar e o `minReplicas` original for maior que `0`, o job registra warning no log e continua.
+
 ## Interacao com GitOps
 
 Se houver sincronizacao automatica (Argo/Flux/etc.), `replicas=0` pode ser revertido.

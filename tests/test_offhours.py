@@ -22,6 +22,7 @@ def clear_env(monkeypatch):
         "ARGO_ENABLED",
         "SCHEDULE_SCOPE",
         "DEFAULT_STARTUP_REPLICAS",
+        "HPA_MIN_ZERO_ENABLED",
         "PROTECTED_APP_STRICT_MODE",
         "DRY_RUN",
         "VERBOSE",
@@ -182,6 +183,7 @@ def test_startup_namespace_strict_mode_blocks_mixed_app_resume(monkeypatch):
 
     monkeypatch.setattr(offhours, "get_argocd_apps_from_namespace", lambda namespace: {"app-main"})
     monkeypatch.setattr(offhours, "app_has_protected_deployment", lambda app, namespace: True)
+    monkeypatch.setattr(offhours, "get_deployments", lambda namespace: [])
 
     resumed = []
     monkeypatch.setattr(offhours, "argo_resume_and_sync_app", lambda app: resumed.append(app))
@@ -273,3 +275,76 @@ def test_argo_request_retries_on_http_429(monkeypatch):
 
     assert attempts["count"] == 2
     assert data == {"items": []}
+
+
+def test_maybe_set_hpa_min_to_zero_warns_when_patch_fails(monkeypatch):
+    monkeypatch.setenv("HPA_MIN_ZERO_ENABLED", "true")
+
+    monkeypatch.setattr(
+        offhours,
+        "get_hpa_for_deployment",
+        lambda namespace, deploy: {
+            "metadata": {"name": "api-hpa", "annotations": {}},
+            "spec": {"minReplicas": 2},
+        },
+    )
+
+    annotated = []
+    monkeypatch.setattr(
+        offhours,
+        "annotate_hpa_original_min",
+        lambda namespace, hpa_name, original_min: annotated.append(
+            (namespace, hpa_name, original_min)
+        ),
+    )
+    monkeypatch.setattr(
+        offhours,
+        "patch_hpa_min_replicas",
+        lambda namespace, hpa_name, min_replicas: False,
+    )
+
+    warnings = []
+    monkeypatch.setattr(offhours, "warn", lambda msg: warnings.append(msg))
+
+    offhours.maybe_set_hpa_min_to_zero("ns", "api")
+
+    assert annotated == [("ns", "api-hpa", 2)]
+    assert any("minReplicas=2" in msg for msg in warnings)
+
+
+def test_maybe_restore_hpa_min_restores_and_cleans_annotation(monkeypatch):
+    monkeypatch.setenv("HPA_MIN_ZERO_ENABLED", "true")
+
+    monkeypatch.setattr(
+        offhours,
+        "get_hpa_for_deployment",
+        lambda namespace, deploy: {
+            "metadata": {
+                "name": "api-hpa",
+                "annotations": {"offhours.platform.io/original-min-replicas": "3"},
+            },
+            "spec": {"minReplicas": 0},
+        },
+    )
+
+    patched = []
+    monkeypatch.setattr(
+        offhours,
+        "patch_hpa_min_replicas",
+        lambda namespace, hpa_name, min_replicas: patched.append(
+            (namespace, hpa_name, min_replicas)
+        )
+        or True,
+    )
+
+    cleaned = []
+    monkeypatch.setattr(
+        offhours,
+        "remove_hpa_original_min_annotation",
+        lambda namespace, hpa_name: cleaned.append((namespace, hpa_name)),
+    )
+
+    offhours.maybe_restore_hpa_min("ns", "api")
+
+    assert patched == [("ns", "api-hpa", 3)]
+    assert cleaned == [("ns", "api-hpa")]

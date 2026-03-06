@@ -20,6 +20,7 @@
 | `VERBOSE` | Nao | Logs detalhados (`true/false`) |
 | `DRY_RUN` | Nao | Nao executa mudancas (`true/false`) |
 | `DEFAULT_STARTUP_REPLICAS` | Nao | Replica padrao no startup sem annotation |
+| `HPA_MIN_ZERO_ENABLED` | Nao | Quando `true`, tenta patchar `minReplicas=0` do HPA no shutdown e restaurar no startup (best-effort, padrao: `false`) |
 | `PROTECTED_APP_STRICT_MODE` | Nao | `true` (seguro) ou `false` (agressivo) |
 
 Regra importante:

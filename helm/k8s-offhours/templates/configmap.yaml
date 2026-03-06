@@ -12,6 +12,7 @@ data:
   VERBOSE: {{ ternary "true" "false" .Values.config.verbose | quote }}
   DRY_RUN: {{ ternary "true" "false" .Values.config.dryRun | quote }}
   DEFAULT_STARTUP_REPLICAS: {{ .Values.config.defaultStartupReplicas | quote }}
+  HPA_MIN_ZERO_ENABLED: {{ ternary "true" "false" .Values.config.hpaMinZeroEnabled | quote }}
   PROTECTED_APP_STRICT_MODE: {{ ternary "true" "false" .Values.config.protectedAppStrictMode | quote }}
   ARGO_SCHEME: {{ .Values.config.argoScheme | quote }}
   ARGO_INSECURE: {{ ternary "true" "false" .Values.config.argoInsecure | quote }}

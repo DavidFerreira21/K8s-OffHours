@@ -30,6 +30,7 @@ config:
   verbose: true
   dryRun: false
   defaultStartupReplicas: 1
+  hpaMinZeroEnabled: false
   protectedAppStrictMode: true
   argoScheme: https
   argoInsecure: true

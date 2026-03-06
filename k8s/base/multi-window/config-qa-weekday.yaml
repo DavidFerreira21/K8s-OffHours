@@ -10,4 +10,5 @@ data:
   VERBOSE: "false"
   DRY_RUN: "false"
   DEFAULT_STARTUP_REPLICAS: "1"
+  HPA_MIN_ZERO_ENABLED: "false"
   PROTECTED_APP_STRICT_MODE: "true"

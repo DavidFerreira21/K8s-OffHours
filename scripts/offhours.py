@@ -166,6 +166,7 @@ def validate_env() -> None:
         fail("SCHEDULE_SCOPE must be 'namespace' or 'deployment'")
 
     _ = env_str("DEFAULT_STARTUP_REPLICAS", "1")
+    _ = env_bool("HPA_MIN_ZERO_ENABLED", False)
     _ = env_bool("PROTECTED_APP_STRICT_MODE", True)
     _ = env_bool("ARGO_DISCOVERY_USE_AUTOMATIC", True)
     _ = env_bool("ARGO_DISCOVERY_USE_MANUAL", False)
@@ -317,6 +318,204 @@ def scale_deployment(namespace: str, deploy: str, replicas: int) -> None:
     )
     _DEPLOYMENT_CACHE.pop((namespace, deploy), None)
     log(f"Deployment {namespace}/{deploy} scaled to {replicas}")
+
+
+def get_hpa_for_deployment(namespace: str, deploy: str) -> dict | None:
+    """Return HPA object targeting a deployment, if any."""
+    try:
+        data = kubectl_get("hpa", namespace=namespace)
+    except SystemExit:
+        warn(
+            f"Could not list HPA resources in namespace {namespace}. "
+            "Skipping HPA minReplicas handling."
+        )
+        return None
+    matches = []
+    for item in data.get("items", []):
+        ref = item.get("spec", {}).get("scaleTargetRef", {})
+        if ref.get("kind") == "Deployment" and ref.get("name") == deploy:
+            matches.append(item)
+
+    if not matches:
+        return None
+    if len(matches) > 1:
+        warn(
+            f"Multiple HPAs found for {namespace}/{deploy}. "
+            f"Using {matches[0].get('metadata', {}).get('name', '')}."
+        )
+    return matches[0]
+
+
+def patch_hpa_min_replicas(namespace: str, hpa_name: str, min_replicas: int) -> bool:
+    """Patch HPA minReplicas. Return True when patch succeeds."""
+    args = [
+        "kubectl",
+        "-n",
+        namespace,
+        "patch",
+        "hpa",
+        hpa_name,
+        "--type=merge",
+        "-p",
+        json.dumps({"spec": {"minReplicas": min_replicas}}),
+    ]
+    cmd_str = " ".join(args)
+    if env_bool("DRY_RUN", False):
+        print(f"[DRYRUN] {cmd_str}")
+        return True
+
+    proc = subprocess.run(args, capture_output=True, text=True)
+    if proc.returncode == 0:
+        return True
+
+    stderr = (proc.stderr or "").strip()
+    stdout = (proc.stdout or "").strip()
+    details = stderr or stdout
+    if details:
+        warn(
+            f"Failed to patch HPA minReplicas for {namespace}/{hpa_name} "
+            f"to {min_replicas}: {details}"
+        )
+    else:
+        warn(
+            f"Failed to patch HPA minReplicas for {namespace}/{hpa_name} "
+            f"to {min_replicas}."
+        )
+    return False
+
+
+def annotate_hpa_original_min(namespace: str, hpa_name: str, original_min: int) -> None:
+    """Persist original HPA minReplicas in annotation when missing."""
+    args = [
+        "kubectl",
+        "-n",
+        namespace,
+        "annotate",
+        "hpa",
+        hpa_name,
+        f"offhours.platform.io/original-min-replicas={original_min}",
+        "--overwrite",
+    ]
+    cmd_str = " ".join(args)
+    if env_bool("DRY_RUN", False):
+        print(f"[DRYRUN] {cmd_str}")
+        return
+
+    proc = subprocess.run(args, capture_output=True, text=True)
+    if proc.returncode != 0:
+        stderr = (proc.stderr or "").strip()
+        stdout = (proc.stdout or "").strip()
+        details = stderr or stdout
+        if details:
+            warn(
+                f"Could not persist original HPA minReplicas annotation for "
+                f"{namespace}/{hpa_name}: {details}"
+            )
+        else:
+            warn(
+                f"Could not persist original HPA minReplicas annotation for "
+                f"{namespace}/{hpa_name}."
+            )
+
+
+def remove_hpa_original_min_annotation(namespace: str, hpa_name: str) -> None:
+    """Remove temporary HPA annotation used to restore minReplicas."""
+    args = [
+        "kubectl",
+        "-n",
+        namespace,
+        "annotate",
+        "hpa",
+        hpa_name,
+        "offhours.platform.io/original-min-replicas-",
+    ]
+    cmd_str = " ".join(args)
+    if env_bool("DRY_RUN", False):
+        print(f"[DRYRUN] {cmd_str}")
+        return
+
+    proc = subprocess.run(args, capture_output=True, text=True)
+    if proc.returncode != 0:
+        stderr = (proc.stderr or "").strip()
+        stdout = (proc.stdout or "").strip()
+        details = stderr or stdout
+        if details:
+            warn(
+                f"Could not remove original HPA minReplicas annotation for "
+                f"{namespace}/{hpa_name}: {details}"
+            )
+        else:
+            warn(
+                f"Could not remove original HPA minReplicas annotation for "
+                f"{namespace}/{hpa_name}."
+            )
+
+
+def maybe_set_hpa_min_to_zero(namespace: str, deploy: str) -> None:
+    """Best-effort HPA handling on shutdown when enabled by flag."""
+    if not env_bool("HPA_MIN_ZERO_ENABLED", False):
+        return
+
+    hpa = get_hpa_for_deployment(namespace, deploy)
+    if hpa is None:
+        return
+
+    hpa_name = hpa.get("metadata", {}).get("name", "")
+    if not hpa_name:
+        return
+
+    annotations = hpa.get("metadata", {}).get("annotations", {})
+    original_saved = annotations.get("offhours.platform.io/original-min-replicas", "")
+    raw_min = hpa.get("spec", {}).get("minReplicas", 1)
+    try:
+        current_min = int(raw_min) if raw_min is not None else 1
+    except (TypeError, ValueError):
+        current_min = 1
+
+    if not original_saved:
+        annotate_hpa_original_min(namespace, hpa_name, current_min)
+
+    if current_min == 0:
+        log(f"HPA {namespace}/{hpa_name} already with minReplicas=0")
+        return
+
+    patched = patch_hpa_min_replicas(namespace, hpa_name, 0)
+    if patched:
+        log(f"HPA {namespace}/{hpa_name} minReplicas set to 0")
+        return
+
+    if current_min > 0:
+        warn(
+            f"HPA patch failed for {namespace}/{hpa_name} with original "
+            f"minReplicas={current_min}. Deployment may scale back above 0."
+        )
+
+
+def maybe_restore_hpa_min(namespace: str, deploy: str) -> None:
+    """Best-effort HPA minReplicas restoration on startup when enabled."""
+    if not env_bool("HPA_MIN_ZERO_ENABLED", False):
+        return
+
+    hpa = get_hpa_for_deployment(namespace, deploy)
+    if hpa is None:
+        return
+
+    hpa_name = hpa.get("metadata", {}).get("name", "")
+    if not hpa_name:
+        return
+
+    annotations = hpa.get("metadata", {}).get("annotations", {})
+    original_saved = str(annotations.get("offhours.platform.io/original-min-replicas", ""))
+    if not original_saved.isdigit():
+        return
+
+    original_min = int(original_saved)
+    patched = patch_hpa_min_replicas(namespace, hpa_name, original_min)
+    if patched:
+        remove_hpa_original_min_annotation(namespace, hpa_name)
+        log(f"HPA {namespace}/{hpa_name} minReplicas restored to {original_min}")
+    else:
+        warn(f"Could not restore HPA {namespace}/{hpa_name} minReplicas to {original_min}")
 
 
 # Argo CD API helpers --------------------------------------------------------------------------
@@ -712,6 +911,7 @@ def handle_shutdown_namespace(namespace: str) -> None:
                 continue
 
         save_original_replicas(namespace, deploy)
+        maybe_set_hpa_min_to_zero(namespace, deploy)
         scale_deployment(namespace, deploy, 0)
 
 
@@ -746,6 +946,16 @@ def handle_startup_namespace(namespace: str) -> None:
                 log(f"Strict mode: skipping startup resume/sync for app {app}")
                 continue
             argo_resume_and_sync_app(app)
+
+        for deploy in get_deployments(namespace):
+            if is_protected_deployment(namespace, deploy):
+                continue
+
+            if env_bool("PROTECTED_APP_STRICT_MODE", True):
+                owner = get_argocd_app_for_deployment(namespace, deploy)
+                if owner and owner in strict_blocked_apps:
+                    continue
+            maybe_restore_hpa_min(namespace, deploy)
         return
 
     for deploy in get_deployments(namespace):
@@ -754,6 +964,7 @@ def handle_startup_namespace(namespace: str) -> None:
             continue
 
         replicas = get_restore_replicas(namespace, deploy)
+        maybe_restore_hpa_min(namespace, deploy)
         scale_deployment(namespace, deploy, replicas)
 
 
@@ -811,6 +1022,7 @@ def handle_shutdown_deployment_scope() -> None:
                 continue
 
         save_original_replicas(namespace, deploy)
+        maybe_set_hpa_min_to_zero(namespace, deploy)
         scale_deployment(namespace, deploy, 0)
 
 
@@ -858,6 +1070,15 @@ def handle_startup_deployment_scope() -> None:
                 )
                 continue
             argo_resume_and_sync_app(app)
+
+        for namespace, deploy in pairs:
+            if is_protected_deployment(namespace, deploy):
+                continue
+            if env_bool("PROTECTED_APP_STRICT_MODE", True):
+                owner = get_argocd_app_for_deployment(namespace, deploy)
+                if owner and (namespace, owner) in strict_blocked_keys:
+                    continue
+            maybe_restore_hpa_min(namespace, deploy)
         return
 
     for namespace, deploy in pairs:
@@ -865,6 +1086,7 @@ def handle_startup_deployment_scope() -> None:
             log(f"Skipping protected deployment: {namespace}/{deploy}")
             continue
         replicas = get_restore_replicas(namespace, deploy)
+        maybe_restore_hpa_min(namespace, deploy)
         scale_deployment(namespace, deploy, replicas)
 
 
@@ -877,13 +1099,14 @@ def main() -> None:
     log(f"Starting {SCRIPT_NAME}")
     log(
         "SCHEDULE_NAME={s} SCHEDULE_SCOPE={ss} ACTION={a} ARGO_ENABLED={ae} "
-        "DRY_RUN={dr} PROTECTED_APP_STRICT_MODE={ps}".format(
+        "DRY_RUN={dr} PROTECTED_APP_STRICT_MODE={ps} HPA_MIN_ZERO_ENABLED={hmz}".format(
             s=env_str("SCHEDULE_NAME"),
             ss=env_str("SCHEDULE_SCOPE", "namespace"),
             a=env_str("ACTION"),
             ae=env_str("ARGO_ENABLED"),
             dr=os.getenv("DRY_RUN", "false"),
             ps=os.getenv("PROTECTED_APP_STRICT_MODE", "true"),
+            hmz=os.getenv("HPA_MIN_ZERO_ENABLED", "false"),
         )
     )
 
