@@ -331,10 +331,9 @@ def test_maybe_restore_hpa_min_restores_and_cleans_annotation(monkeypatch):
     monkeypatch.setattr(
         offhours,
         "patch_hpa_min_replicas",
-        lambda namespace, hpa_name, min_replicas: patched.append(
-            (namespace, hpa_name, min_replicas)
-        )
-        or True,
+        lambda namespace, hpa_name, min_replicas: (
+            patched.append((namespace, hpa_name, min_replicas)) or True
+        ),
     )
 
     cleaned = []

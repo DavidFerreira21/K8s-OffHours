@@ -377,10 +377,7 @@ def patch_hpa_min_replicas(namespace: str, hpa_name: str, min_replicas: int) -> 
             f"to {min_replicas}: {details}"
         )
     else:
-        warn(
-            f"Failed to patch HPA minReplicas for {namespace}/{hpa_name} "
-            f"to {min_replicas}."
-        )
+        warn(f"Failed to patch HPA minReplicas for {namespace}/{hpa_name} to {min_replicas}.")
     return False
 
 
@@ -413,8 +410,7 @@ def annotate_hpa_original_min(namespace: str, hpa_name: str, original_min: int) 
             )
         else:
             warn(
-                f"Could not persist original HPA minReplicas annotation for "
-                f"{namespace}/{hpa_name}."
+                f"Could not persist original HPA minReplicas annotation for {namespace}/{hpa_name}."
             )
 
 
@@ -446,8 +442,7 @@ def remove_hpa_original_min_annotation(namespace: str, hpa_name: str) -> None:
             )
         else:
             warn(
-                f"Could not remove original HPA minReplicas annotation for "
-                f"{namespace}/{hpa_name}."
+                f"Could not remove original HPA minReplicas annotation for {namespace}/{hpa_name}."
             )
 
 
