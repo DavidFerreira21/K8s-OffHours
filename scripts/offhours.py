@@ -14,9 +14,11 @@ import ssl
 import subprocess
 import sys
 import time
+from hashlib import sha1
 from urllib import error, parse, request
 
 SCRIPT_NAME = "offhours"
+STATE_NAMESPACE = "offhours-system"
 
 # Runtime-only caches to reduce repeated API calls during one job execution.
 _DEPLOYMENTS_CACHE: dict[str, list[str]] = {}
@@ -167,6 +169,8 @@ def validate_env() -> None:
 
     _ = env_str("DEFAULT_STARTUP_REPLICAS", "1")
     _ = env_bool("HPA_MIN_ZERO_ENABLED", False)
+    _ = env_bool("HPA_DELETE_RESTORE_ENABLED", False)
+    _ = env_bool("HPA_DELETE_ONLY_ENABLED", False)
     _ = env_bool("PROTECTED_APP_STRICT_MODE", True)
     _ = env_bool("ARGO_DISCOVERY_USE_AUTOMATIC", True)
     _ = env_bool("ARGO_DISCOVERY_USE_MANUAL", False)
@@ -320,6 +324,21 @@ def scale_deployment(namespace: str, deploy: str, replicas: int) -> None:
     log(f"Deployment {namespace}/{deploy} scaled to {replicas}")
 
 
+def run_kubectl_best_effort(args: list[str], stdin_data: str | None = None) -> tuple[bool, str]:
+    """Run kubectl without terminating the whole job on command failure."""
+    cmd_str = " ".join(args)
+    if env_bool("DRY_RUN", False):
+        print(f"[DRYRUN] {cmd_str}")
+        return True, ""
+
+    proc = subprocess.run(args, input=stdin_data, capture_output=True, text=True)
+    if proc.returncode == 0:
+        return True, (proc.stdout or "").strip()
+
+    details = ((proc.stderr or "").strip() or (proc.stdout or "").strip()).strip()
+    return False, details
+
+
 def get_hpa_for_deployment(namespace: str, deploy: str) -> dict | None:
     """Return HPA object targeting a deployment, if any."""
     try:
@@ -344,6 +363,182 @@ def get_hpa_for_deployment(namespace: str, deploy: str) -> dict | None:
             f"Using {matches[0].get('metadata', {}).get('name', '')}."
         )
     return matches[0]
+
+
+def sanitize_hpa_manifest(hpa: dict) -> dict:
+    """Drop server-managed fields to keep a restorable manifest."""
+    clean = json.loads(json.dumps(hpa))
+    clean.pop("status", None)
+    metadata = clean.get("metadata", {})
+    for field in (
+        "uid",
+        "resourceVersion",
+        "generation",
+        "creationTimestamp",
+        "managedFields",
+        "selfLink",
+    ):
+        metadata.pop(field, None)
+    return clean
+
+
+def hpa_state_configmap_name(namespace: str, deploy: str) -> str:
+    """Build deterministic configmap name for one deployment HPA state."""
+    digest = sha1(f"{namespace}/{deploy}".encode()).hexdigest()[:12]
+    return f"offhours-hpa-state-{digest}"
+
+
+def save_hpa_state(namespace: str, deploy: str, hpa: dict) -> bool:
+    """Persist HPA manifest in ConfigMap before delete."""
+    hpa_name = hpa.get("metadata", {}).get("name", "")
+    cm_name = hpa_state_configmap_name(namespace, deploy)
+    cm_obj = {
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "metadata": {
+            "name": cm_name,
+            "namespace": STATE_NAMESPACE,
+            "labels": {
+                "app.kubernetes.io/name": "k8s-offhours",
+                "offhours.platform.io/type": "hpa-state",
+                "offhours.platform.io/target-namespace": namespace,
+                "offhours.platform.io/target-deployment": deploy,
+                "offhours.platform.io/target-hpa": hpa_name,
+            },
+        },
+        "data": {
+            "hpa.json": json.dumps(sanitize_hpa_manifest(hpa), separators=(",", ":")),
+            "targetNamespace": namespace,
+            "targetDeployment": deploy,
+            "targetHpaName": hpa_name,
+        },
+    }
+    ok, details = run_kubectl_best_effort(["kubectl", "apply", "-f", "-"], json.dumps(cm_obj))
+    if not ok:
+        if details:
+            warn(f"Could not save HPA state for {namespace}/{deploy}: {details}")
+        else:
+            warn(f"Could not save HPA state for {namespace}/{deploy}.")
+    return ok
+
+
+def load_hpa_state(namespace: str, deploy: str) -> dict | None:
+    """Load saved HPA manifest from ConfigMap, if present."""
+    cm_name = hpa_state_configmap_name(namespace, deploy)
+    ok, raw = run_kubectl_best_effort(
+        ["kubectl", "-n", STATE_NAMESPACE, "get", "configmap", cm_name, "-o", "json"]
+    )
+    if not ok:
+        return None
+    try:
+        cm_obj = json.loads(raw)
+    except json.JSONDecodeError:
+        warn(f"Invalid JSON when loading HPA state ConfigMap {STATE_NAMESPACE}/{cm_name}.")
+        return None
+
+    hpa_raw = cm_obj.get("data", {}).get("hpa.json", "")
+    if not hpa_raw:
+        warn(f"HPA state ConfigMap {STATE_NAMESPACE}/{cm_name} has no hpa.json key.")
+        return None
+    try:
+        return json.loads(hpa_raw)
+    except json.JSONDecodeError:
+        warn(f"HPA state ConfigMap {STATE_NAMESPACE}/{cm_name} contains invalid hpa.json.")
+        return None
+
+
+def delete_hpa_state(namespace: str, deploy: str) -> None:
+    """Delete saved HPA state ConfigMap."""
+    cm_name = hpa_state_configmap_name(namespace, deploy)
+    ok, details = run_kubectl_best_effort(
+        ["kubectl", "-n", STATE_NAMESPACE, "delete", "configmap", cm_name, "--ignore-not-found"]
+    )
+    if not ok:
+        if details:
+            warn(f"Could not delete HPA state ConfigMap {STATE_NAMESPACE}/{cm_name}: {details}")
+        else:
+            warn(f"Could not delete HPA state ConfigMap {STATE_NAMESPACE}/{cm_name}.")
+
+
+def delete_hpa(namespace: str, hpa_name: str) -> bool:
+    """Delete HPA resource."""
+    ok, details = run_kubectl_best_effort(["kubectl", "-n", namespace, "delete", "hpa", hpa_name])
+    if not ok:
+        if details:
+            warn(f"Could not delete HPA {namespace}/{hpa_name}: {details}")
+        else:
+            warn(f"Could not delete HPA {namespace}/{hpa_name}.")
+    return ok
+
+
+def apply_hpa_manifest(hpa_manifest: dict, namespace: str, deploy: str) -> bool:
+    """Re-apply HPA manifest from saved state."""
+    ok, details = run_kubectl_best_effort(["kubectl", "apply", "-f", "-"], json.dumps(hpa_manifest))
+    if not ok:
+        if details:
+            warn(f"Could not restore HPA for {namespace}/{deploy}: {details}")
+        else:
+            warn(f"Could not restore HPA for {namespace}/{deploy}.")
+    return ok
+
+
+def hpa_delete_restore_enabled() -> bool:
+    """Return whether delete/restore HPA mode is enabled."""
+    return env_bool("HPA_DELETE_RESTORE_ENABLED", False)
+
+
+def hpa_delete_only_enabled() -> bool:
+    """Return whether delete-only HPA mode is enabled."""
+    return env_bool("HPA_DELETE_ONLY_ENABLED", False)
+
+
+def maybe_delete_hpa_only(namespace: str, deploy: str) -> None:
+    """Delete HPA on shutdown without state persistence."""
+    hpa = get_hpa_for_deployment(namespace, deploy)
+    if hpa is None:
+        return
+
+    hpa_name = hpa.get("metadata", {}).get("name", "")
+    if not hpa_name:
+        return
+
+    if delete_hpa(namespace, hpa_name):
+        log(f"HPA {namespace}/{hpa_name} deleted (delete-only mode).")
+
+
+def maybe_delete_hpa_for_restore(namespace: str, deploy: str) -> None:
+    """Delete HPA on shutdown after saving state in ConfigMap."""
+    hpa = get_hpa_for_deployment(namespace, deploy)
+    if hpa is None:
+        return
+
+    hpa_name = hpa.get("metadata", {}).get("name", "")
+    if not hpa_name:
+        return
+
+    if not save_hpa_state(namespace, deploy, hpa):
+        warn(f"Skipping HPA delete for {namespace}/{hpa_name} because state was not persisted.")
+        return
+
+    if delete_hpa(namespace, hpa_name):
+        log(f"HPA {namespace}/{hpa_name} deleted (state saved in {STATE_NAMESPACE}).")
+
+
+def maybe_restore_deleted_hpa(namespace: str, deploy: str) -> None:
+    """Restore HPA on startup from ConfigMap saved state."""
+    manifest = load_hpa_state(namespace, deploy)
+    if manifest is None:
+        return
+
+    if not apply_hpa_manifest(manifest, namespace, deploy):
+        return
+
+    delete_hpa_state(namespace, deploy)
+    hpa_name = manifest.get("metadata", {}).get("name", "")
+    if hpa_name:
+        log(f"HPA {namespace}/{hpa_name} restored from saved state.")
+    else:
+        log(f"HPA for {namespace}/{deploy} restored from saved state.")
 
 
 def patch_hpa_min_replicas(namespace: str, hpa_name: str, min_replicas: int) -> bool:
@@ -511,6 +706,27 @@ def maybe_restore_hpa_min(namespace: str, deploy: str) -> None:
         log(f"HPA {namespace}/{hpa_name} minReplicas restored to {original_min}")
     else:
         warn(f"Could not restore HPA {namespace}/{hpa_name} minReplicas to {original_min}")
+
+
+def maybe_handle_hpa_shutdown(namespace: str, deploy: str) -> None:
+    """Handle HPA behavior on shutdown according to selected mode flags."""
+    if hpa_delete_restore_enabled():
+        maybe_delete_hpa_for_restore(namespace, deploy)
+        return
+    if hpa_delete_only_enabled():
+        maybe_delete_hpa_only(namespace, deploy)
+        return
+    maybe_set_hpa_min_to_zero(namespace, deploy)
+
+
+def maybe_handle_hpa_startup(namespace: str, deploy: str) -> None:
+    """Handle HPA behavior on startup according to selected mode flags."""
+    if hpa_delete_restore_enabled():
+        maybe_restore_deleted_hpa(namespace, deploy)
+        return
+    if hpa_delete_only_enabled():
+        return
+    maybe_restore_hpa_min(namespace, deploy)
 
 
 # Argo CD API helpers --------------------------------------------------------------------------
@@ -906,7 +1122,7 @@ def handle_shutdown_namespace(namespace: str) -> None:
                 continue
 
         save_original_replicas(namespace, deploy)
-        maybe_set_hpa_min_to_zero(namespace, deploy)
+        maybe_handle_hpa_shutdown(namespace, deploy)
         scale_deployment(namespace, deploy, 0)
 
 
@@ -950,7 +1166,7 @@ def handle_startup_namespace(namespace: str) -> None:
                 owner = get_argocd_app_for_deployment(namespace, deploy)
                 if owner and owner in strict_blocked_apps:
                     continue
-            maybe_restore_hpa_min(namespace, deploy)
+            maybe_handle_hpa_startup(namespace, deploy)
         return
 
     for deploy in get_deployments(namespace):
@@ -959,7 +1175,7 @@ def handle_startup_namespace(namespace: str) -> None:
             continue
 
         replicas = get_restore_replicas(namespace, deploy)
-        maybe_restore_hpa_min(namespace, deploy)
+        maybe_handle_hpa_startup(namespace, deploy)
         scale_deployment(namespace, deploy, replicas)
 
 
@@ -1017,7 +1233,7 @@ def handle_shutdown_deployment_scope() -> None:
                 continue
 
         save_original_replicas(namespace, deploy)
-        maybe_set_hpa_min_to_zero(namespace, deploy)
+        maybe_handle_hpa_shutdown(namespace, deploy)
         scale_deployment(namespace, deploy, 0)
 
 
@@ -1073,7 +1289,7 @@ def handle_startup_deployment_scope() -> None:
                 owner = get_argocd_app_for_deployment(namespace, deploy)
                 if owner and (namespace, owner) in strict_blocked_keys:
                     continue
-            maybe_restore_hpa_min(namespace, deploy)
+            maybe_handle_hpa_startup(namespace, deploy)
         return
 
     for namespace, deploy in pairs:
@@ -1081,7 +1297,7 @@ def handle_startup_deployment_scope() -> None:
             log(f"Skipping protected deployment: {namespace}/{deploy}")
             continue
         replicas = get_restore_replicas(namespace, deploy)
-        maybe_restore_hpa_min(namespace, deploy)
+        maybe_handle_hpa_startup(namespace, deploy)
         scale_deployment(namespace, deploy, replicas)
 
 
@@ -1094,7 +1310,9 @@ def main() -> None:
     log(f"Starting {SCRIPT_NAME}")
     log(
         "SCHEDULE_NAME={s} SCHEDULE_SCOPE={ss} ACTION={a} ARGO_ENABLED={ae} "
-        "DRY_RUN={dr} PROTECTED_APP_STRICT_MODE={ps} HPA_MIN_ZERO_ENABLED={hmz}".format(
+        "DRY_RUN={dr} PROTECTED_APP_STRICT_MODE={ps} "
+        "HPA_MIN_ZERO_ENABLED={hmz} HPA_DELETE_RESTORE_ENABLED={hdr} "
+        "HPA_DELETE_ONLY_ENABLED={hdo}".format(
             s=env_str("SCHEDULE_NAME"),
             ss=env_str("SCHEDULE_SCOPE", "namespace"),
             a=env_str("ACTION"),
@@ -1102,8 +1320,28 @@ def main() -> None:
             dr=os.getenv("DRY_RUN", "false"),
             ps=os.getenv("PROTECTED_APP_STRICT_MODE", "true"),
             hmz=os.getenv("HPA_MIN_ZERO_ENABLED", "false"),
+            hdr=os.getenv("HPA_DELETE_RESTORE_ENABLED", "false"),
+            hdo=os.getenv("HPA_DELETE_ONLY_ENABLED", "false"),
         )
     )
+
+    if hpa_delete_only_enabled() and hpa_delete_restore_enabled():
+        warn(
+            "Both HPA_DELETE_ONLY_ENABLED=true and HPA_DELETE_RESTORE_ENABLED=true. "
+            "Using delete-restore mode (HPA_DELETE_RESTORE_ENABLED)."
+        )
+    elif hpa_delete_only_enabled():
+        warn(
+            "HPA_DELETE_ONLY_ENABLED=true: HPAs will be deleted on shutdown "
+            "and not restored by this job. Use with caution; restoration "
+            "depends on GitOps reconciliation or manual apply."
+        )
+        if not env_bool("ARGO_ENABLED", False):
+            warn(
+                "HPA_DELETE_ONLY_ENABLED is active with ARGO_ENABLED=false. "
+                "Without GitOps/controller reconciliation, HPAs may remain "
+                "absent until manual restore."
+            )
 
     if env_str("SCHEDULE_SCOPE", "namespace") == "namespace":
         target_namespaces = get_target_namespaces()

@@ -56,6 +56,13 @@ Com `PROTECTED_APP_STRICT_MODE=true`:
 - no `shutdown`, app com qualquer deployment protegido nao e pausada e nao tem deployments escalados
 - no `startup`, essa app tambem nao recebe `resume/sync`
 
+Modos de HPA (opcional):
+
+- `HPA_MIN_ZERO_ENABLED=true`: tenta `minReplicas=0` no shutdown e restaura no startup (best-effort)
+- `HPA_DELETE_RESTORE_ENABLED=true`: salva HPA em ConfigMap tecnico, deleta no shutdown e recria no startup
+- `HPA_DELETE_ONLY_ENABLED=true`: deleta HPA no shutdown sem restaurar no startup (recomendado com GitOps)
+- se `HPA_DELETE_ONLY_ENABLED=true` e `HPA_DELETE_RESTORE_ENABLED=true`, prevalece `HPA_DELETE_RESTORE_ENABLED`
+
 Detalhes de arquitetura e fluxo interno: [architecture.md](docs/architecture.md).
 Detalhes de modos e variaveis: [configuration.md](docs/configuration.md).
 Guia tecnico Argo CD (usuario, token e RBAC): [argocd-offhours-user.md](docs/argocd-offhours-user.md).

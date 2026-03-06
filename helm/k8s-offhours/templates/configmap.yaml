@@ -13,6 +13,8 @@ data:
   DRY_RUN: {{ ternary "true" "false" .Values.config.dryRun | quote }}
   DEFAULT_STARTUP_REPLICAS: {{ .Values.config.defaultStartupReplicas | quote }}
   HPA_MIN_ZERO_ENABLED: {{ ternary "true" "false" .Values.config.hpaMinZeroEnabled | quote }}
+  HPA_DELETE_RESTORE_ENABLED: {{ ternary "true" "false" .Values.config.hpaDeleteRestoreEnabled | quote }}
+  HPA_DELETE_ONLY_ENABLED: {{ ternary "true" "false" .Values.config.hpaDeleteOnlyEnabled | quote }}
   PROTECTED_APP_STRICT_MODE: {{ ternary "true" "false" .Values.config.protectedAppStrictMode | quote }}
   ARGO_SCHEME: {{ .Values.config.argoScheme | quote }}
   ARGO_INSECURE: {{ ternary "true" "false" .Values.config.argoInsecure | quote }}

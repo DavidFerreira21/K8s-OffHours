@@ -23,6 +23,8 @@ def clear_env(monkeypatch):
         "SCHEDULE_SCOPE",
         "DEFAULT_STARTUP_REPLICAS",
         "HPA_MIN_ZERO_ENABLED",
+        "HPA_DELETE_RESTORE_ENABLED",
+        "HPA_DELETE_ONLY_ENABLED",
         "PROTECTED_APP_STRICT_MODE",
         "DRY_RUN",
         "VERBOSE",
@@ -347,3 +349,149 @@ def test_maybe_restore_hpa_min_restores_and_cleans_annotation(monkeypatch):
 
     assert patched == [("ns", "api-hpa", 3)]
     assert cleaned == [("ns", "api-hpa")]
+
+
+def test_hpa_delete_restore_mode_takes_priority_on_shutdown(monkeypatch):
+    monkeypatch.setenv("HPA_DELETE_RESTORE_ENABLED", "true")
+    monkeypatch.setenv("HPA_MIN_ZERO_ENABLED", "true")
+
+    deleted = []
+    min_zero = []
+    monkeypatch.setattr(
+        offhours,
+        "maybe_delete_hpa_for_restore",
+        lambda namespace, deploy: deleted.append((namespace, deploy)),
+    )
+    monkeypatch.setattr(
+        offhours,
+        "maybe_set_hpa_min_to_zero",
+        lambda namespace, deploy: min_zero.append((namespace, deploy)),
+    )
+
+    offhours.maybe_handle_hpa_shutdown("ns", "api")
+
+    assert deleted == [("ns", "api")]
+    assert min_zero == []
+
+
+def test_hpa_delete_restore_mode_takes_priority_on_startup(monkeypatch):
+    monkeypatch.setenv("HPA_DELETE_RESTORE_ENABLED", "true")
+    monkeypatch.setenv("HPA_MIN_ZERO_ENABLED", "true")
+
+    restored = []
+    min_restore = []
+    monkeypatch.setattr(
+        offhours,
+        "maybe_restore_deleted_hpa",
+        lambda namespace, deploy: restored.append((namespace, deploy)),
+    )
+    monkeypatch.setattr(
+        offhours,
+        "maybe_restore_hpa_min",
+        lambda namespace, deploy: min_restore.append((namespace, deploy)),
+    )
+
+    offhours.maybe_handle_hpa_startup("ns", "api")
+
+    assert restored == [("ns", "api")]
+    assert min_restore == []
+
+
+def test_maybe_delete_hpa_for_restore_skips_delete_when_save_fails(monkeypatch):
+    monkeypatch.setenv("HPA_DELETE_RESTORE_ENABLED", "true")
+    monkeypatch.setattr(
+        offhours,
+        "get_hpa_for_deployment",
+        lambda namespace, deploy: {"metadata": {"name": "api-hpa"}, "spec": {}},
+    )
+    monkeypatch.setattr(offhours, "save_hpa_state", lambda namespace, deploy, hpa: False)
+
+    deleted = []
+    monkeypatch.setattr(
+        offhours,
+        "delete_hpa",
+        lambda namespace, hpa_name: deleted.append((namespace, hpa_name)) or True,
+    )
+
+    offhours.maybe_delete_hpa_for_restore("ns", "api")
+
+    assert deleted == []
+
+
+def test_hpa_delete_restore_takes_priority_when_both_flags_true_on_shutdown(monkeypatch):
+    monkeypatch.setenv("HPA_DELETE_ONLY_ENABLED", "true")
+    monkeypatch.setenv("HPA_DELETE_RESTORE_ENABLED", "true")
+    monkeypatch.setenv("HPA_MIN_ZERO_ENABLED", "true")
+
+    delete_only = []
+    delete_restore = []
+    min_zero = []
+    monkeypatch.setattr(
+        offhours,
+        "maybe_delete_hpa_only",
+        lambda namespace, deploy: delete_only.append((namespace, deploy)),
+    )
+    monkeypatch.setattr(
+        offhours,
+        "maybe_delete_hpa_for_restore",
+        lambda namespace, deploy: delete_restore.append((namespace, deploy)),
+    )
+    monkeypatch.setattr(
+        offhours,
+        "maybe_set_hpa_min_to_zero",
+        lambda namespace, deploy: min_zero.append((namespace, deploy)),
+    )
+
+    offhours.maybe_handle_hpa_shutdown("ns", "api")
+
+    assert delete_only == []
+    assert delete_restore == [("ns", "api")]
+    assert min_zero == []
+
+
+def test_hpa_delete_restore_takes_priority_when_both_flags_true_on_startup(monkeypatch):
+    monkeypatch.setenv("HPA_DELETE_ONLY_ENABLED", "true")
+    monkeypatch.setenv("HPA_DELETE_RESTORE_ENABLED", "true")
+    monkeypatch.setenv("HPA_MIN_ZERO_ENABLED", "true")
+
+    restored = []
+    min_restore = []
+    monkeypatch.setattr(
+        offhours,
+        "maybe_restore_deleted_hpa",
+        lambda namespace, deploy: restored.append((namespace, deploy)),
+    )
+    monkeypatch.setattr(
+        offhours,
+        "maybe_restore_hpa_min",
+        lambda namespace, deploy: min_restore.append((namespace, deploy)),
+    )
+
+    offhours.maybe_handle_hpa_startup("ns", "api")
+
+    assert restored == [("ns", "api")]
+    assert min_restore == []
+
+
+def test_hpa_delete_only_mode_without_restore_flag_on_shutdown(monkeypatch):
+    monkeypatch.setenv("HPA_DELETE_ONLY_ENABLED", "true")
+    monkeypatch.setenv("HPA_DELETE_RESTORE_ENABLED", "false")
+    monkeypatch.setenv("HPA_MIN_ZERO_ENABLED", "true")
+
+    delete_only = []
+    delete_restore = []
+    monkeypatch.setattr(
+        offhours,
+        "maybe_delete_hpa_only",
+        lambda namespace, deploy: delete_only.append((namespace, deploy)),
+    )
+    monkeypatch.setattr(
+        offhours,
+        "maybe_delete_hpa_for_restore",
+        lambda namespace, deploy: delete_restore.append((namespace, deploy)),
+    )
+
+    offhours.maybe_handle_hpa_shutdown("ns", "api")
+
+    assert delete_only == [("ns", "api")]
+    assert delete_restore == []

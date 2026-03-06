@@ -71,3 +71,37 @@ kubectl label ns <namespace> offhours.platform.io/schedule=<schedule-name> --ove
 # quando SCHEDULE_SCOPE=deployment
 kubectl -n <namespace> label deploy <deployment> offhours.platform.io/schedule=<schedule-name> --overwrite
 ```
+
+## Modos de HPA (opcional)
+
+Ativar modo best-effort (`minReplicas=0`):
+
+```bash
+helm upgrade --install offhours ./helm/k8s-offhours \
+  -n offhours-system --create-namespace \
+  --set config.hpaMinZeroEnabled=true \
+  --set config.hpaDeleteRestoreEnabled=false
+```
+
+Ativar modo garantido (`delete-restore`):
+
+```bash
+helm upgrade --install offhours ./helm/k8s-offhours \
+  -n offhours-system --create-namespace \
+  --set config.hpaMinZeroEnabled=false \
+  --set config.hpaDeleteRestoreEnabled=true
+```
+
+Observacao: `config.hpaDeleteRestoreEnabled=true` tem prioridade sobre `config.hpaMinZeroEnabled`.
+
+Ativar modo `delete-only` (sem restaurar no startup):
+
+```bash
+helm upgrade --install offhours ./helm/k8s-offhours \
+  -n offhours-system --create-namespace \
+  --set config.hpaMinZeroEnabled=false \
+  --set config.hpaDeleteRestoreEnabled=false \
+  --set config.hpaDeleteOnlyEnabled=true
+```
+
+Observacao: se `config.hpaDeleteOnlyEnabled=true` e `config.hpaDeleteRestoreEnabled=true`, prevalece `config.hpaDeleteRestoreEnabled`.

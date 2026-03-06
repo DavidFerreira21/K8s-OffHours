@@ -20,6 +20,12 @@ Regra base para todos os cenarios:
 
 - `SCHEDULE_NAME` deve ser exatamente igual ao valor da label `offhours.platform.io/schedule` usada no alvo.
 
+Observacao para cenarios com HPA:
+
+- para testar `delete-restore`, use `HPA_DELETE_RESTORE_ENABLED=true`
+- para testar `delete-only`, use `HPA_DELETE_ONLY_ENABLED=true` (preferencialmente com Argo/Flux)
+- se `HPA_DELETE_ONLY_ENABLED=true` e `HPA_DELETE_RESTORE_ENABLED=true`, prevalece `HPA_DELETE_RESTORE_ENABLED`
+
 ## Scenario 1 - Namespace scope
 
 Arquivo: `k8s/examples/scenarios/scenario-1-namespace-scope.yaml`
@@ -77,7 +83,7 @@ Variaveis recomendadas:
 
 ```yaml
 data:
-  SCHEDULE_NAME: "dev"
+  SCHEDULE_NAME: "default"
   SCHEDULE_SCOPE: "deployment"
   ARGO_ENABLED: "false"
   DRY_RUN: "false"
@@ -90,7 +96,7 @@ Exemplo de patch rapido:
 ```bash
 kubectl -n offhours-system patch configmap offhours-config --type merge -p '{
   "data":{
-    "SCHEDULE_NAME":"dev",
+    "SCHEDULE_NAME":"default",
     "SCHEDULE_SCOPE":"deployment",
     "ARGO_ENABLED":"false",
     "DRY_RUN":"false",
@@ -99,6 +105,17 @@ kubectl -n offhours-system patch configmap offhours-config --type merge -p '{
   }
 }'
 ```
+
+HPA de exemplo realista vinculado ao Scenario 2:
+
+```bash
+kubectl apply -f k8s/examples/scenarios/hpa-scenario-2-checkout-api.yaml
+```
+
+Este HPA aponta para `Deployment/checkout-api` no namespace `app-dev-deploy-scope` e usa:
+
+- metricas de CPU e memoria
+- `behavior` para suavizar scale-up/scale-down
 
 ## Scenario 3 - Argo app override (`argopp`)
 

@@ -19,11 +19,11 @@ kind-load:
 
 .PHONY: run-shutdown
 run-shutdown:
-	set -a; . ./.env; set +a; ACTION=shutdown python3 ./scripts/offhours.py
+	if [ -f ./.env ]; then set -a; . ./.env; set +a; fi; ACTION=shutdown python3 ./scripts/offhours.py
 
 .PHONY: run-startup
 run-startup:
-	set -a; . ./.env; set +a; ACTION=startup python3 ./scripts/offhours.py
+	if [ -f ./.env ]; then set -a; . ./.env; set +a; fi; ACTION=startup python3 ./scripts/offhours.py
 
 .PHONY: test
 test:

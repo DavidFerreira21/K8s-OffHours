@@ -25,6 +25,40 @@ kubectl apply -f k8s/examples/scenarios/hpa-example.yaml
 
 Se quiser reutilizar em outro workload, ajuste `namespace`, `scaleTargetRef.name`, `minReplicas` e `maxReplicas`.
 
+Opcional (modos de HPA no OffHours):
+
+```bash
+# modo best-effort: tenta minReplicas=0
+kubectl -n offhours-system patch configmap offhours-config --type merge -p '{
+  "data":{
+    "HPA_MIN_ZERO_ENABLED":"true",
+    "HPA_DELETE_RESTORE_ENABLED":"false"
+  }
+}'
+
+# modo garantido: salva/deleta/restaura HPA (prioridade sobre min-zero)
+kubectl -n offhours-system patch configmap offhours-config --type merge -p '{
+  "data":{
+    "HPA_MIN_ZERO_ENABLED":"false",
+    "HPA_DELETE_RESTORE_ENABLED":"true",
+    "HPA_DELETE_ONLY_ENABLED":"false"
+  }
+}'
+
+# modo delete-only: deleta HPA sem restaurar (usar com GitOps)
+kubectl -n offhours-system patch configmap offhours-config --type merge -p '{
+  "data":{
+    "HPA_MIN_ZERO_ENABLED":"false",
+    "HPA_DELETE_RESTORE_ENABLED":"false",
+    "HPA_DELETE_ONLY_ENABLED":"true"
+  }
+}'
+```
+
+Regra de precedencia:
+
+- se `HPA_DELETE_ONLY_ENABLED=true` e `HPA_DELETE_RESTORE_ENABLED=true`, prevalece `HPA_DELETE_RESTORE_ENABLED`.
+
 ## Opcao 2: Multiplas janelas (`k8s/base/multi-window`)
 
 ```bash

@@ -6,7 +6,7 @@ namespace:
 
 image:
   repository: david210/k8s-offhours
-  tag: "0.2.1"
+  tag: "0.2.2"
   pullPolicy: IfNotPresent
 
 serviceAccount:
@@ -31,6 +31,8 @@ config:
   dryRun: false
   defaultStartupReplicas: 1
   hpaMinZeroEnabled: false
+  hpaDeleteRestoreEnabled: false
+  hpaDeleteOnlyEnabled: false
   protectedAppStrictMode: true
   argoScheme: https
   argoInsecure: true
