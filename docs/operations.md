@@ -49,6 +49,7 @@ Opcional:
 - Quando `HPA_DELETE_ONLY_ENABLED=true` (sozinho), esse modo tem prioridade sobre `HPA_MIN_ZERO_ENABLED`.
 - Quando `HPA_DELETE_RESTORE_ENABLED=true`, esse modo tem prioridade sobre `HPA_MIN_ZERO_ENABLED`.
 - Recomendacao forte para `HPA_DELETE_ONLY_ENABLED=true`: usar com Argo/Flux ativo para que o HPA seja recriado por reconciliacao GitOps.
+- Sem GitOps ativo (ou sem recriacao manual), o HPA fica ausente apos o `shutdown` e sera considerado perdido no ambiente.
 
 Observacoes praticas:
 

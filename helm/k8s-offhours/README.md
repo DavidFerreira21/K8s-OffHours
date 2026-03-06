@@ -105,3 +105,4 @@ helm upgrade --install offhours ./helm/k8s-offhours \
 ```
 
 Observacao: se `config.hpaDeleteOnlyEnabled=true` e `config.hpaDeleteRestoreEnabled=true`, prevalece `config.hpaDeleteRestoreEnabled`.
+Observacao importante: com `config.hpaDeleteOnlyEnabled=true`, sem Argo/Flux (ou sem recriacao manual), o HPA ficara ausente apos o `shutdown`.

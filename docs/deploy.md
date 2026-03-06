@@ -58,6 +58,7 @@ kubectl -n offhours-system patch configmap offhours-config --type merge -p '{
 Regra de precedencia:
 
 - se `HPA_DELETE_ONLY_ENABLED=true` e `HPA_DELETE_RESTORE_ENABLED=true`, prevalece `HPA_DELETE_RESTORE_ENABLED`.
+- aviso importante: com `HPA_DELETE_ONLY_ENABLED=true`, sem GitOps/recriacao manual, o HPA ficara ausente apos o `shutdown`.
 
 ## Opcao 2: Multiplas janelas (`k8s/base/multi-window`)
 

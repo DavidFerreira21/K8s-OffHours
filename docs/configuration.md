@@ -22,7 +22,7 @@
 | `DEFAULT_STARTUP_REPLICAS` | Nao | Replica padrao no startup sem annotation |
 | `HPA_MIN_ZERO_ENABLED` | Nao | Quando `true`, tenta patchar `minReplicas=0` do HPA no shutdown e restaurar no startup (best-effort, padrao: `false`) |
 | `HPA_DELETE_RESTORE_ENABLED` | Nao | Quando `true`, salva HPA em ConfigMap tecnico, deleta no shutdown e recria no startup (padrao: `false`) |
-| `HPA_DELETE_ONLY_ENABLED` | Nao | Quando `true`, deleta HPA no shutdown sem salvar estado e nao restaura no startup (padrao: `false`) |
+| `HPA_DELETE_ONLY_ENABLED` | Nao | Quando `true`, deleta HPA no shutdown sem salvar estado e nao restaura no startup; sem GitOps/recriacao manual o HPA fica ausente (padrao: `false`) |
 | `PROTECTED_APP_STRICT_MODE` | Nao | `true` (seguro) ou `false` (agressivo) |
 
 Prioridade entre modos de HPA:

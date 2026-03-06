@@ -60,7 +60,8 @@ Modos de HPA (opcional):
 
 - `HPA_MIN_ZERO_ENABLED=true`: tenta `minReplicas=0` no shutdown e restaura no startup (best-effort)
 - `HPA_DELETE_RESTORE_ENABLED=true`: salva HPA em ConfigMap tecnico, deleta no shutdown e recria no startup
-- `HPA_DELETE_ONLY_ENABLED=true`: deleta HPA no shutdown sem restaurar no startup (recomendado com GitOps)
+- `HPA_DELETE_ONLY_ENABLED=true`: deleta HPA no shutdown sem salvar estado e nao restaura no startup
+- com `HPA_DELETE_ONLY_ENABLED=true`, sem GitOps (Argo/Flux) ou sem recriacao manual, o HPA ficara ausente (perdido)
 - se `HPA_DELETE_ONLY_ENABLED=true` e `HPA_DELETE_RESTORE_ENABLED=true`, prevalece `HPA_DELETE_RESTORE_ENABLED`
 
 Detalhes de arquitetura e fluxo interno: [architecture.md](docs/architecture.md).
