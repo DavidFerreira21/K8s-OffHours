@@ -6,7 +6,7 @@ on:
     tags: ["v*"]
     paths:
       - "Dockerfile"
-      - "scripts/**"
+      - "engine/**"
       - "tests/**"
       - "pyproject.toml"
       - "requirements*.txt"
@@ -14,7 +14,7 @@ on:
   pull_request:
     paths:
       - "Dockerfile"
-      - "scripts/**"
+      - "engine/**"
       - "tests/**"
       - "pyproject.toml"
       - "requirements*.txt"

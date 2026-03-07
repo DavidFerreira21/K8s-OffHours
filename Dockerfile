@@ -20,7 +20,8 @@ RUN set -eux; \
     chmod +x /usr/local/bin/kubectl; \
     rm -f /tmp/kubectl.sha256
 
-COPY scripts/offhours.py /app/offhours.py
+COPY engine/offhours.py /app/offhours.py
+COPY engine/offhours_core /app/offhours_core
 
 WORKDIR /app
 

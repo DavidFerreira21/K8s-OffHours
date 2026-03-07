@@ -231,13 +231,14 @@ Comportamentos garantidos:
 Toda a lógica da ferramenta está implementada em:
 
 ```
-scripts/offhours.py
+engine/offhours.py
+engine/offhours_core/settings.py
 ```
 
 Principais blocos do código:
 
-* **Validação e parsing de ambiente**
-  `validate_env`, `env_*`
+* **Configuracao e validacao de ambiente**
+  `Settings`, `load_settings`, `validate_env`
 
 * **Integração com Kubernetes**
   `kubectl_get`, `get_target_*`, `scale_deployment`
@@ -250,3 +251,7 @@ Principais blocos do código:
 
 * **Orquestração da execução**
   `handle_*`, `main`
+
+Referencia detalhada do motor Python:
+
+- [engine-python.md](engine-python.md)

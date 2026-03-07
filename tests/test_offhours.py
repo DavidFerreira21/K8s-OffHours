@@ -6,7 +6,7 @@ from urllib import error
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULE_PATH = ROOT / "scripts" / "offhours.py"
+MODULE_PATH = ROOT / "engine" / "offhours.py"
 SPEC = importlib.util.spec_from_file_location("offhours", MODULE_PATH)
 offhours = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader

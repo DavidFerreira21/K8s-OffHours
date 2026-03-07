@@ -1,7 +1,6 @@
 apiVersion: v2
 name: k8s-offhours
 description: Helm chart for K8s OffHours CronJobs
-version: 0.2.3
-appVersion: "0.2.2"
+version: 0.2.4
+appVersion: "0.2.3"
 type: application
-
