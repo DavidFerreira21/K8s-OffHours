@@ -8,23 +8,10 @@ Se voce chegou agora no repositorio, siga esta ordem:
 
 ## Escolha rapida por objetivo
 
-- Quero entender como funciona internamente:
-  - [architecture.md](architecture.md)
-
-- Quero configurar variaveis e labels:
-  - [configuration.md](configuration.md)
-
-- Quero implantar em cluster real:
-  - [deploy.md](deploy.md)
-
-- Quero operar com seguranca (RBAC, HPA, GitOps):
-  - [operations.md](operations.md)
-
-- Quero maximizar economia de custo com autoscaling de nos:
-  - [cost-optimization.md](cost-optimization.md)
-
-- Quero validar cenarios prontos:
-  - [scenarios.md](scenarios.md)
-
-- Quero integrar com Argo CD (usuario/token/RBAC):
-  - [argocd-offhours-user.md](argocd-offhours-user.md)
+- Quero entender como funciona internamente: [architecture.md](architecture.md)
+- Quero configurar variaveis e labels: [configuration.md](configuration.md)
+- Quero implantar em cluster real: [deploy.md](deploy.md)
+- Quero operar com seguranca (RBAC, HPA, GitOps): [operations.md](operations.md)
+- Quero maximizar economia de custo com autoscaling de nos: [cost-optimization.md](cost-optimization.md)
+- Quero validar cenarios prontos: [scenarios.md](scenarios.md)
+- Quero integrar com Argo CD (usuario/token/RBAC): [argocd-offhours-user.md](argocd-offhours-user.md)

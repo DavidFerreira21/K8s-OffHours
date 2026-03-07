@@ -1,27 +1,62 @@
 # Arquitetura
 
-## Design principles
+## Princípios de design
 
-- Declarative first: selecao baseada em labels
-- Idempotent operations: execucoes repetidas nao causam inconsistencias
-- GitOps-friendly: integracao opcional com Argo CD
-- Cloud-agnostic: compativel com qualquer Kubernetes com autoscaling
-- Minimal surface area: sem CRD e sem Operator
+O K8s OffHours foi projetado seguindo alguns princípios arquiteturais:
 
-## Como funciona
+* **Declarative first**
+  A seleção de workloads é baseada exclusivamente em labels Kubernetes.
 
-### Escopo do schedule (`SCHEDULE_SCOPE`)
+* **Operações idempotentes**
+  Execuções repetidas não geram inconsistências no estado dos workloads.
 
-- `namespace` (padrao): seleciona namespaces por label de schedule
-- `deployment`: seleciona deployments por label de schedule
+* **Compatibilidade com GitOps**
+  Integração opcional com Argo CD para evitar drift em ambientes reconciliados.
 
-Label usada nos dois modos:
+* **Cloud-agnostic**
+  Funciona em qualquer cluster Kubernetes com suporte a autoscaling.
 
-- `offhours.platform.io/schedule: "<nome-do-schedule>"`
+* **Baixa complexidade operacional**
+  A solução não utiliza CRDs nem Operators, utilizando apenas recursos nativos do Kubernetes.
 
-### Protecao de deployment
+---
 
-Deployments com annotation abaixo nunca sao escalados:
+# Funcionamento geral
+
+O comportamento do K8s OffHours é controlado por variáveis de ambiente e executado através de CronJobs que disparam o engine principal.
+
+O engine executa operações de:
+
+* descoberta de workloads
+* tratamento de autoscalers
+* escala de deployments
+* integração opcional com Argo CD
+
+---
+
+# Escopo do schedule (`SCHEDULE_SCOPE`)
+
+Define como os workloads elegíveis serão descobertos.
+
+Valores suportados:
+
+* **`namespace` (padrão)**
+  Seleciona namespaces por label e processa todos os deployments dentro deles.
+
+* **`deployment`**
+  Seleciona diretamente deployments que possuem a label configurada.
+
+Label utilizada em ambos os modos:
+
+```yaml
+offhours.platform.io/schedule: "<schedule-name>"
+```
+
+---
+
+# Proteção de deployments
+
+Deployments podem ser explicitamente excluídos da automação utilizando a annotation abaixo:
 
 ```yaml
 metadata:
@@ -29,66 +64,189 @@ metadata:
     offhours.platform.io/protected: "true"
 ```
 
-### Modo com Argo CD (`ARGO_ENABLED=true`)
+Deployments marcados como protegidos nunca serão escalados pelo K8s OffHours.
 
-No `shutdown`:
+---
 
-- pausa sync das Applications elegiveis
-- escala deployments elegiveis para `0`
+# Integração com Argo CD
 
-No `startup`:
+Quando a integração com Argo CD está habilitada (`ARGO_ENABLED=true`), o comportamento da ferramenta muda para evitar conflitos com o reconciliador GitOps.
 
-- reativa sync das Applications
-- dispara sync da Application
+## Fluxo de shutdown
 
-### Descoberta de Application no Argo
+Durante o shutdown:
 
-Ordem de descoberta:
+1. O sync das Applications elegíveis é pausado
+2. Os deployments elegíveis são escalados para `0`
 
-1. `offhours.platform.io/argopp` (override manual por namespace), quando `ARGO_DISCOVERY_USE_MANUAL=true`
-2. cadeia automatica, quando `ARGO_DISCOVERY_USE_AUTOMATIC=true`:
-   - `argocd.argoproj.io/instance` (label)
-   - `argocd.argoproj.io/tracking-id` (annotation)
-   - fallback por `spec.destination.namespace` na API do Argo
+## Fluxo de startup
 
-Defaults recomendados:
+Durante o startup:
 
-- automatico habilitado
-- manual desabilitado
+1. O sync das Applications é reativado
+2. Um sync é disparado para restaurar o estado desejado
 
-### Protecao em apps mistas (`PROTECTED_APP_STRICT_MODE`)
+---
 
-- `true` (recomendado):
-  - no `shutdown`, se uma app tiver deployment protegido, nao pausa sync nem escala deployments da app
-  - no `startup`, essa app tambem nao recebe `resume/sync`
-- `false`: pausa sync da app e escala apenas deployments nao protegidos
+# Descoberta de Applications no Argo CD
 
-### Modo sem Argo (`ARGO_ENABLED=false`)
+A descoberta de Applications associadas aos workloads segue a seguinte ordem:
 
-No `shutdown`:
+1. **Override manual por namespace**
 
-- salva replicas originais em annotation
-- escala para `0`
+Utilizado quando:
 
-No `startup`:
+```text
+ARGO_DISCOVERY_USE_MANUAL=true
+```
 
-- restaura replicas da annotation
-- fallback para `DEFAULT_STARTUP_REPLICAS`
+Annotation utilizada:
 
-## Idempotencia
+```text
+offhours.platform.io/argopp
+```
 
-- Se deployment ja estiver em `replicas=0`, nao falha
-- Se `offhours.platform.io/original-replicas` ja existir, nao sobrescreve
-- No modo Argo, se app ja estiver pausada, nao gera erro fatal
+---
 
-## Arquivo principal
+2. **Descoberta automática**
 
-- `scripts/offhours.py`
+Quando:
 
-Blocos principais:
+```text
+ARGO_DISCOVERY_USE_AUTOMATIC=true
+```
 
-- validacao e parsing de ambiente (`validate_env`, `env_*`)
-- integracao Kubernetes (`kubectl_get`, `get_target_*`, `scale_deployment`)
-- integracao Argo API (`argo_request`, `get_all_applications`, `get_app`)
-- descoberta de app (`get_argocd_apps_from_namespace`, `get_argocd_app_for_deployment`)
-- orquestracao por escopo/acao (`handle_*`, `main`)
+A cadeia de descoberta é:
+
+1. `argocd.argoproj.io/instance` (label)
+2. `argocd.argoproj.io/tracking-id` (annotation)
+3. fallback por `spec.destination.namespace` consultando a API do Argo CD
+
+Configuração recomendada:
+
+* descoberta automática habilitada
+* override manual desabilitado
+
+---
+
+# Proteção em aplicações mistas
+
+Algumas aplicações podem possuir deployments protegidos e não protegidos simultaneamente.
+
+O comportamento é controlado por:
+
+```text
+PROTECTED_APP_STRICT_MODE
+```
+
+## `true` (recomendado)
+
+Se uma Application possuir ao menos um deployment protegido:
+
+* o sync da Application não é pausado
+* nenhum deployment da Application é escalado
+* no startup essa Application também não recebe `resume/sync`
+
+Isso evita inconsistências em aplicações parcialmente protegidas.
+
+---
+
+## `false`
+
+* o sync da Application é pausado
+* apenas deployments não protegidos são escalados
+
+---
+
+# Modo sem Argo CD
+
+Quando:
+
+```text
+ARGO_ENABLED=false
+```
+
+A ferramenta opera diretamente sobre os deployments.
+
+## Shutdown
+
+Durante o shutdown:
+
+1. As replicas originais são salvas em annotation no deployment
+2. O deployment é escalado para `0`
+
+---
+
+## Startup
+
+Durante o startup:
+
+1. As replicas são restauradas a partir da annotation
+2. Caso não exista annotation, utiliza-se:
+
+```text
+DEFAULT_STARTUP_REPLICAS
+```
+
+---
+
+# Tratamento de HPA e persistencia de estado
+
+Os Deployments podem ter HPA associado. Nesses casos, o comportamento pode ser ajustado por modo:
+
+* **`HPA_MIN_ZERO_ENABLED=true`**
+  tenta patchar `spec.minReplicas=0` no shutdown e restaura no startup (best-effort).
+
+* **`HPA_DELETE_RESTORE_ENABLED=true`**
+  salva o manifesto do HPA em ConfigMap tecnico, deleta no shutdown e recria no startup.
+
+* **`HPA_DELETE_ONLY_ENABLED=true`**
+  deleta no shutdown e nao restaura no startup (recomendado apenas com reconciliacao GitOps).
+
+Precedencia:
+
+* se `HPA_DELETE_RESTORE_ENABLED=true` e `HPA_DELETE_ONLY_ENABLED=true`, prevalece `HPA_DELETE_RESTORE_ENABLED`.
+
+Persistencia de estado:
+
+* replicas originais de deployment: annotation no proprio deployment.
+* estado de HPA no modo `delete-restore`: ConfigMap tecnico no namespace da ferramenta (ex.: `offhours-system`).
+
+---
+
+# Idempotência
+
+O engine foi projetado para garantir execuções seguras e repetíveis.
+
+Comportamentos garantidos:
+
+* Se o deployment já estiver em `replicas=0`, a operação não falha
+* Se `offhours.platform.io/original-replicas` já existir, não é sobrescrito
+* No modo Argo, se uma Application já estiver pausada, nenhuma falha é gerada
+
+---
+
+# Engine principal
+
+Toda a lógica da ferramenta está implementada em:
+
+```
+scripts/offhours.py
+```
+
+Principais blocos do código:
+
+* **Validação e parsing de ambiente**
+  `validate_env`, `env_*`
+
+* **Integração com Kubernetes**
+  `kubectl_get`, `get_target_*`, `scale_deployment`
+
+* **Integração com API do Argo CD**
+  `argo_request`, `get_all_applications`, `get_app`
+
+* **Descoberta de Applications**
+  `get_argocd_apps_from_namespace`, `get_argocd_app_for_deployment`
+
+* **Orquestração da execução**
+  `handle_*`, `main`

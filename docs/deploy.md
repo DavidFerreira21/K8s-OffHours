@@ -17,7 +17,7 @@ Observacao: para validar economia real apos o deploy, veja [cost-optimization.md
 kubectl apply -k k8s/base
 ```
 
-Opcional (HPA de exemplo vinculado ao Scenario 1):
+Opcional (HPA de exemplo vinculado ao Cenario 1):
 
 ```bash
 kubectl apply -f k8s/examples/scenarios/hpa-example.yaml
@@ -25,7 +25,7 @@ kubectl apply -f k8s/examples/scenarios/hpa-example.yaml
 
 Se quiser reutilizar em outro workload, ajuste `namespace`, `scaleTargetRef.name`, `minReplicas` e `maxReplicas`.
 
-Opcional (modos de HPA no OffHours):
+Opcional (modos de HPA no OffHours em manifests base):
 
 ```bash
 # modo best-effort: tenta minReplicas=0
@@ -98,6 +98,38 @@ Validacao:
 
 ```bash
 kubectl -n offhours-system get cronjob
+kubectl -n offhours-system get configmap
+```
+
+Observacoes importantes para Helm:
+
+- nomes de CronJob/ConfigMap variam conforme o nome da release.
+- exemplo com release `offhours`: CronJobs `offhours-k8s-offhours-shutdown` e `offhours-k8s-offhours-startup`, ConfigMap `offhours-k8s-offhours-config`.
+- prefira alterar configuracoes com `helm upgrade --set ...`; evite `kubectl patch` em ConfigMap gerenciado pelo Helm.
+
+Modos de HPA via Helm:
+
+```bash
+# modo best-effort: tenta minReplicas=0
+helm upgrade offhours ./helm/k8s-offhours \
+  -n offhours-system --reuse-values \
+  --set config.hpaMinZeroEnabled=true \
+  --set config.hpaDeleteRestoreEnabled=false \
+  --set config.hpaDeleteOnlyEnabled=false
+
+# modo garantido: salva/deleta/restaura HPA
+helm upgrade offhours ./helm/k8s-offhours \
+  -n offhours-system --reuse-values \
+  --set config.hpaMinZeroEnabled=false \
+  --set config.hpaDeleteRestoreEnabled=true \
+  --set config.hpaDeleteOnlyEnabled=false
+
+# modo delete-only: deleta HPA sem restaurar (usar com GitOps)
+helm upgrade offhours ./helm/k8s-offhours \
+  -n offhours-system --reuse-values \
+  --set config.hpaMinZeroEnabled=false \
+  --set config.hpaDeleteRestoreEnabled=false \
+  --set config.hpaDeleteOnlyEnabled=true
 ```
 
 Ao final do procedimento, aplique a label de schedule no alvo desejado:

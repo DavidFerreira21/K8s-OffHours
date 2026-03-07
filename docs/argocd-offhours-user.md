@@ -1,4 +1,4 @@
-# Argo CD Offhours User
+# Usuario tecnico Argo CD para Offhours
 
 Guia para criar um usuario tecnico no Argo CD para o K8s OffHours.
 
@@ -19,6 +19,23 @@ Resultado esperado: usuario `offhours` com token e permissao minima para operaca
 | `applications` | `get` |
 | `applications` | `update` |
 | `applications` | `sync` |
+
+Importante:
+
+- Essa tabela cobre apenas RBAC do Argo CD (API de Applications).
+- O tratamento de HPA e feito via API do Kubernetes, entao exige permissoes no `ServiceAccount` do Offhours (ClusterRole/Role), nao no usuario do Argo.
+
+Permissoes Kubernetes adicionais para HPA (quando habilitado):
+
+| Modo HPA | Permissoes Kubernetes necessarias |
+| --- | --- |
+| `HPA_MIN_ZERO_ENABLED=true` | `get,list,watch,patch,update` em `horizontalpodautoscalers.autoscaling` |
+| `HPA_DELETE_RESTORE_ENABLED=true` | `get,list,watch,delete` em `horizontalpodautoscalers.autoscaling` + `get,list,create,patch,update,delete` em `configmaps` |
+| `HPA_DELETE_ONLY_ENABLED=true` | `get,list,watch,delete` em `horizontalpodautoscalers.autoscaling` |
+
+Referencia:
+
+- Para a matriz completa de RBAC operacional, veja [operations.md](operations.md).
 
 ## Fluxo A - Argo no mesmo cluster do Offhours
 
@@ -103,11 +120,22 @@ Observacao:
 
 ## Validacao rapida
 
+0. Descubra o nome real do CronJob de shutdown no seu ambiente:
+
+```bash
+kubectl -n offhours-system get cronjob
+```
+
+Exemplos comuns:
+
+- manifests base: `offhours-shutdown`
+- Helm release `offhours`: `offhours-k8s-offhours-shutdown`
+
 1. Execute um shutdown manual:
 
 ```bash
 kubectl -n offhours-system delete job manual-shutdown-argo --ignore-not-found
-kubectl -n offhours-system create job --from=cronjob/offhours-shutdown manual-shutdown-argo
+kubectl -n offhours-system create job --from=cronjob/<cronjob-shutdown> manual-shutdown-argo
 kubectl -n offhours-system logs -f job/manual-shutdown-argo
 ```
 

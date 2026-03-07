@@ -1,287 +1,180 @@
 # K8s OffHours
 
-![Helm](https://img.shields.io/badge/helm-chart-blue)
-![Docker](https://img.shields.io/badge/docker-image-2496ED?logo=docker&logoColor=white)
-![License](https://img.shields.io/github/license/DavidFerreira21/K8s-OffHours)
+K8s OffHours e um toolkit operacional para Kubernetes que reduz workloads fora do horario de uso e restaura no inicio da janela operacional. A proposta e reduzir custo em ambientes nao produtivos com automacao previsivel baseada em labels.
 
-Helm repo: https://davidferreira21.github.io/K8s-OffHours
+## Problema
 
-K8s OffHours e uma solucao nativa para Kubernetes que automatiza o desligamento e religamento de workloads fora do horario comercial, reduzindo custos de infraestrutura com seguranca em ambientes nao produtivos.
+Muitos ambientes de desenvolvimento, QA e homologacao ficam ativos 24x7 mesmo sem uso continuo. Isso mantem pods e nodes ativos sem necessidade.
 
-## O que a solucao resolve
+O K8s OffHours existe para automatizar esse ciclo com seguranca:
 
-K8s OffHours automatiza o desligamento e religamento de workloads Kubernetes fora do horario de uso para reduzir custo em ambientes nao produtivos (principalmente HML).
+- reduzir workloads elegiveis para `0` no off-hours
+- restaurar replicas no inicio do expediente
+- integrar com fluxo GitOps quando necessario
 
-Exemplo comum:
+## Recursos principais
 
-- ambiente HML ativo das `08:00` as `20:00` (seg-sex)
-- fora dessa janela, workloads sao escalados para `0`
+- Selecao de alvo por label em `namespace` ou `deployment`
+- Orquestracao de `shutdown` e `startup` por `CronJob`
+- Protecao de workloads criticos via annotation
+- Integracao opcional com Argo CD (pause/resume/sync)
+- Estrategias opcionais para HPA:
+  - `min-zero` (best-effort)
+  - `delete-restore` (deterministico com backup)
+  - `delete-only` (orientado a GitOps, sem restauracao pela ferramenta)
+- Suporte a multi-window (multiplas releases/manifests)
+- Modos `dry-run` e `verbose` para validacao segura
 
-Comparado com operacao 24x7, uma janela de 12h por dia util representa potencial de reducao de horas de worker node em torno de `64.3%`.
+## Visao de arquitetura
 
-Detalhes de operacao, limites e premissas: [operations.md](docs/operations.md).
-Detalhes de estrategia de economia e autoscaling de nos: [cost-optimization.md](docs/cost-optimization.md).
-
-## Como funciona
-
-A solucao roda via `CronJob` e executa duas acoes:
-
-- `shutdown`: salva replicas atuais e escala Deployments elegiveis para `0`
-- `startup`: restaura replicas salvas (ou fallback configurado)
-
-Ela suporta dois modos de selecao de alvo:
-
-- `SCHEDULE_SCOPE=namespace`: seleciona namespaces por label
-- `SCHEDULE_SCOPE=deployment`: seleciona deployments por label
-
-Label de schedule usada:
-
-- `offhours.platform.io/schedule=<schedule-name>`
-- `SCHEDULE_NAME` deve ser exatamente o mesmo valor de `<schedule-name>`
-
-Protecao de workloads criticos:
-
-- annotation `offhours.platform.io/protected=true` impede scale desse deployment
-
-Modo GitOps:
-
-- `ARGO_ENABLED=true`: integra com Argo CD (API), pausa/reativa sync
-- `ARGO_ENABLED=false`: atua apenas em Kubernetes
-- descoberta de app Argo:
-  - `ARGO_DISCOVERY_USE_MANUAL=true`: usa override `offhours.platform.io/argopp` (prioridade 1)
-  - `ARGO_DISCOVERY_USE_AUTOMATIC=true`: usa cadeia automatica (`instance`, `tracking-id`, fallback por destination namespace)
-
-Com `PROTECTED_APP_STRICT_MODE=true`:
-
-- no `shutdown`, app com qualquer deployment protegido nao e pausada e nao tem deployments escalados
-- no `startup`, essa app tambem nao recebe `resume/sync`
-
-Modos de HPA (opcional):
-
-- `HPA_MIN_ZERO_ENABLED=true`: tenta `minReplicas=0` no shutdown e restaura no startup (best-effort)
-- `HPA_DELETE_RESTORE_ENABLED=true`: salva HPA em ConfigMap tecnico, deleta no shutdown e recria no startup
-- `HPA_DELETE_ONLY_ENABLED=true`: deleta HPA no shutdown sem salvar estado e nao restaura no startup
-- com `HPA_DELETE_ONLY_ENABLED=true`, sem GitOps (Argo/Flux) ou sem recriacao manual, o HPA ficara ausente (perdido)
-- se `HPA_DELETE_ONLY_ENABLED=true` e `HPA_DELETE_RESTORE_ENABLED=true`, prevalece `HPA_DELETE_RESTORE_ENABLED`
-
-Detalhes de arquitetura e fluxo interno: [architecture.md](docs/architecture.md).
-Detalhes de modos e variaveis: [configuration.md](docs/configuration.md).
-Guia tecnico Argo CD (usuario, token e RBAC): [argocd-offhours-user.md](docs/argocd-offhours-user.md).
-
-## Architecture Overview
+O K8s OffHours usa execucao orientada por CronJob.
 
 ```text
-Helm chart
-   ↓
-CronJobs (shutdown/startup)
-   ↓
-Python engine (offhours.py)
-   ↓
-Kubernetes API
-   ↓
-Argo CD API (optional)
+CronJob (shutdown/startup)
+        |
+        v
+Engine Python (scripts/offhours.py)
+        |
+        +--> API do Kubernetes (descoberta + scale de workloads)
+        |
+        +--> API do Argo CD (opcional: pause/resume/sync)
+        |
+        +--> Estado em ConfigMap (replicas + backup de HPA quando habilitado)
 ```
 
-Fluxo simplificado de shutdown:
+### 1. Como os CronJobs disparam o engine
 
-```text
-CronJob shutdown
-      ↓
-Scale deployments -> 0
-      ↓
-Node autoscaler remove nodes (when enabled)
-```
+- Sao implantados dois CronJobs: um para `shutdown` e outro para `startup`
+- Os dois executam o mesmo engine, mudando apenas a variavel `ACTION`
+- O comportamento final e controlado por variaveis em ConfigMap/Secret
 
-## Quando usar
+### 2. Como os workloads sao descobertos
 
-Recomendado para:
+A descoberta e sempre baseada em label:
 
-- clusters de desenvolvimento
-- ambientes de staging
-- ambientes de HML
+- Chave: `offhours.platform.io/schedule`
+- `SCHEDULE_NAME` deve ser exatamente igual ao valor da label
 
+Escopos suportados:
 
-## Observacoes importantes
+- `SCHEDULE_SCOPE=namespace`: seleciona namespaces por label e processa os deployments internos
+- `SCHEDULE_SCOPE=deployment`: seleciona deployments diretamente por label
 
-- A solucao escala Pods/Deployments, nao desliga node diretamente.
-- Para economia real de infraestrutura, o cluster precisa de node autoscaling (Cluster Autoscaler, Karpenter, etc.).
-- Sem autoscaling, os pods reduzem, mas os nodes continuam ativos.
-- Recomendado para HML; nao recomendado para producao sem avaliacao especifica.
+Protecao de workload:
 
-Detalhes (RBAC, HPA, GitOps e seguranca): [operations.md](docs/operations.md).
-Detalhes de custo e como obter economia real: [cost-optimization.md](docs/cost-optimization.md).
+- Annotation `offhours.platform.io/protected=true` impede scale daquele deployment
 
-## Como usar em ambiente real
+### 3. Como o HPA e tratado
 
-### 1) Instalar via Helm
+O K8s OffHours suporta tres modos:
 
-Adicionar repo Helm publicado no GitHub Pages:
+- `HPA_MIN_ZERO_ENABLED=true`
+  - tenta patchar `spec.minReplicas=0` no shutdown
+  - restaura `minReplicas` original no startup
+  - modo best-effort (o cluster pode rejeitar scale-to-zero)
+- `HPA_DELETE_RESTORE_ENABLED=true`
+  - salva o manifesto completo do HPA em ConfigMap tecnico
+  - deleta o HPA no shutdown
+  - recria o HPA no startup
+- `HPA_DELETE_ONLY_ENABLED=true`
+  - deleta o HPA no shutdown
+  - nao restaura no startup
+  - recomendado apenas quando GitOps vai reconciliar o manifesto do HPA
+
+Regra de precedencia:
+
+- Se `HPA_DELETE_RESTORE_ENABLED=true` e `HPA_DELETE_ONLY_ENABLED=true`, prevalece `delete-restore`.
+
+### 4. Como o estado e armazenado
+
+- Replicas originais dos deployments ficam em annotation no proprio deployment
+- Estado de HPA (quando `delete-restore` esta habilitado) fica em ConfigMaps tecnicos no namespace da ferramenta (exemplo: `offhours-system`)
+
+## Inicio rapido
+
+### Passo 1. Instalar com Helm
 
 ```bash
 helm repo add k8s-offhours https://davidferreira21.github.io/K8s-OffHours
 helm repo update
-helm search repo k8s-offhours --versions
-```
-
-Instalar sem Argo CD (padrao):
-
-```bash
 helm upgrade --install offhours k8s-offhours/k8s-offhours \
   -n offhours-system --create-namespace \
-  --version 0.2.1 \
-  --set config.scheduleName=dev \
-  --set config.scheduleScope=namespace
-```
-
-Observacao:
-- no chart, o `config.scheduleName` padrao e `default`
-- se seus namespaces/deployments usam `offhours.platform.io/schedule=dev`, ajuste `config.scheduleName=dev`
-
-Instalar com Argo CD:
-
-```bash
-kubectl -n offhours-system create secret generic offhours-argocd \
-  --from-literal=ARGO_SERVER='argocd-server.argocd.svc.cluster.local:80' \
-  --from-literal=ARGO_TOKEN='<token>'
-
-helm upgrade --install offhours k8s-offhours/k8s-offhours \
-  -n offhours-system --create-namespace \
-  --version 0.2.1 \
-  --set config.scheduleName=dev \
+  --set config.scheduleName=dev-weekday \
   --set config.scheduleScope=namespace \
-  --set argocd.enabled=true \
-  --set argocd.existingSecret=offhours-argocd
-```
-
-Upgrade para nova versao do chart:
-
-```bash
-helm repo update
-helm upgrade offhours k8s-offhours/k8s-offhours \
-  -n offhours-system \
-  --version <nova-versao>
-```
-
-Instalacao local (desenvolvimento):
-
-```bash
-helm upgrade --install offhours ./helm/k8s-offhours \
-  -n offhours-system --create-namespace
-```
-
-Multi-window com Helm (uma release por janela):
-
-```bash
-# janela dev-weekday
-helm upgrade --install offhours-dev k8s-offhours/k8s-offhours \
-  -n offhours-system --create-namespace \
-  --version 0.2.1 \
-  --set schedule.shutdown="0 20 * * 1-5" \
-  --set schedule.startup="0 8 * * 1-5" \
-  --set schedule.timeZone="America/Sao_Paulo" \
-  --set config.scheduleName="dev-weekday" \
-  --set config.scheduleScope="namespace" \
-  --set argocd.enabled=false
-
-# janela qa-weekday
-helm upgrade --install offhours-qa k8s-offhours/k8s-offhours \
-  -n offhours-system \
-  --version 0.2.1 \
-  --set schedule.shutdown="0 22 * * 1-5" \
-  --set schedule.startup="0 9 * * 1-5" \
-  --set schedule.timeZone="America/Sao_Paulo" \
-  --set config.scheduleName="qa-weekday" \
-  --set config.scheduleScope="namespace" \
   --set argocd.enabled=false
 ```
 
-### 2) Testar manualmente antes de operar por schedule
-
-Verifique os nomes dos CronJobs criados pelo Helm:
+### Passo 2. Aplicar label no alvo
 
 ```bash
-kubectl -n offhours-system get cronjob
+# escopo namespace
+kubectl label ns <namespace> offhours.platform.io/schedule=dev-weekday --overwrite
+
+# escopo deployment
+kubectl -n <namespace> label deploy <deployment> offhours.platform.io/schedule=dev-weekday --overwrite
 ```
 
-Shutdown manual:
+### Passo 3. Validar manualmente
 
 ```bash
-kubectl -n offhours-system delete job manual-shutdown --ignore-not-found
 kubectl -n offhours-system create job --from=cronjob/offhours-k8s-offhours-shutdown manual-shutdown
 kubectl -n offhours-system logs -f job/manual-shutdown
-```
 
-Startup manual:
-
-```bash
-kubectl -n offhours-system delete job manual-startup --ignore-not-found
 kubectl -n offhours-system create job --from=cronjob/offhours-k8s-offhours-startup manual-startup
 kubectl -n offhours-system logs -f job/manual-startup
 ```
 
-Roteiro de cenarios de validacao: [scenarios.md](docs/scenarios.md).
+## Exemplo de uso
 
-### 3) Aplicar label no alvo desejado (obrigatorio)
+Namespace compartilhado de desenvolvimento com janela util:
 
-Ao final da instalacao/configuracao, aplique a label com o mesmo valor de `scheduleName`:
+- Startup: `08:00` (seg-sex)
+- Shutdown: `20:00` (seg-sex)
+- Label: `offhours.platform.io/schedule=dev-weekday`
 
-```bash
-# quando SCHEDULE_SCOPE=namespace
-kubectl label ns <namespace> offhours.platform.io/schedule=<schedule-name> --overwrite
+Comportamento esperado:
 
-# quando SCHEDULE_SCOPE=deployment
-kubectl -n <namespace> label deploy <deployment> offhours.platform.io/schedule=<schedule-name> --overwrite
-```
+- No shutdown, deployments elegiveis vao para `0`
+- No startup, replicas sao restauradas por estado salvo/fallback
+- Workloads protegidos sao ignorados
 
-### Fluxos legados e avancados
+## Documentacao
 
-- Deploy manual com manifests base (`kubectl apply -k`) e opcoes avancadas: [deploy.md](docs/deploy.md)
-- Referencia completa de variaveis e modos: [configuration.md](docs/configuration.md)
+- Entrada principal: [docs/README.md](docs/README.md)
+- Arquitetura: [docs/architecture.md](docs/architecture.md)
+- Configuracao: [docs/configuration.md](docs/configuration.md)
+- Deploy: [docs/deploy.md](docs/deploy.md)
+- Operacao e seguranca: [docs/operations.md](docs/operations.md)
+- Cenarios de validacao: [docs/scenarios.md](docs/scenarios.md)
+- Otimizacao de custo: [docs/cost-optimization.md](docs/cost-optimization.md)
+- Guia de usuario Argo CD: [docs/argocd-offhours-user.md](docs/argocd-offhours-user.md)
 
-## Estrutura do repositorio
+## Estrutura do projeto
 
 ```text
 .
-├── Dockerfile
-├── Makefile
-├── .env.example
 ├── scripts/
 │   └── offhours.py
+├── k8s/
+│   ├── base/
+│   └── examples/
 ├── helm/
 │   └── k8s-offhours/
 ├── docs/
-│   ├── architecture.md
-│   ├── configuration.md
-│   ├── deploy.md
-│   ├── operations.md
-│   ├── scenarios.md
-│   └── argocd-offhours-user.md
-└── k8s/
-    ├── base/
-    └── examples/
+├── tests/
+├── Dockerfile
+├── Makefile
+└── .env.example
 ```
 
-## Inicio rapido da documentacao
+## Contribuicao
 
-Se esta chegando agora, comece por: [docs/README.md](docs/README.md).
+Contribuicoes sao bem-vindas. Comece por:
 
-## Documentacao detalhada
-
-- Arquitetura e fluxo interno: [architecture.md](docs/architecture.md)
-- Modos de operacao e variaveis: [configuration.md](docs/configuration.md)
-- Deploy detalhado (base e multi-window): [deploy.md](docs/deploy.md)
-- Operacao, RBAC, HPA, GitOps e seguranca: [operations.md](docs/operations.md)
-- Otimizacao de custo e integracao com autoscaling de nos: [cost-optimization.md](docs/cost-optimization.md)
-- Cenarios de validacao: [scenarios.md](docs/scenarios.md)
-- Guia tecnico Argo CD (usuario/token/RBAC): [argocd-offhours-user.md](docs/argocd-offhours-user.md)
-
-## Governanca open source
-
-- Guia de contribuicao: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Codigo de conduta: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-- Politica de seguranca: [SECURITY.md](SECURITY.md)
-- Guia de mantenedores (labels/milestones): [.github/MAINTAINER_GUIDE.md](.github/MAINTAINER_GUIDE.md)
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- [SECURITY.md](SECURITY.md)
 
 ## Licenca
 
-Este projeto esta sob a licenca MIT. Veja [LICENSE](LICENSE).
+Este projeto esta sob licenca MIT. Veja [LICENSE](LICENSE).

@@ -10,8 +10,12 @@ A ServiceAccount do CronJob precisa de:
 - `get/list/patch/update` em deployments
 - `get/patch/update` em `deployments/scale`
 - `get/list` em replicasets (opcional)
-- `get/list/watch/patch/update` em `horizontalpodautoscalers.autoscaling` (quando `HPA_MIN_ZERO_ENABLED=true`)
-- `get/list/create/patch/update/delete` em `configmaps` (quando `HPA_DELETE_RESTORE_ENABLED=true`)
+
+Permissoes especificas para HPA por modo:
+
+- `HPA_MIN_ZERO_ENABLED=true`: `get,list,watch,patch,update` em `horizontalpodautoscalers.autoscaling`
+- `HPA_DELETE_RESTORE_ENABLED=true`: `get,list,watch,delete` em `horizontalpodautoscalers.autoscaling` e `get,list,create,patch,update,delete` em `configmaps`
+- `HPA_DELETE_ONLY_ENABLED=true`: `get,list,watch,delete` em `horizontalpodautoscalers.autoscaling`
 
 Se usar Argo:
 
@@ -42,7 +46,7 @@ Observacao: com metricas ativas, HPA pode redefinir replicas.
 Opcional:
 
 - `HPA_MIN_ZERO_ENABLED=true`: tenta patchar `minReplicas=0` no `shutdown` para HPAs que apontam para Deployments alvo e restaura o valor original no `startup`.
-- Se o patch falhar e o `minReplicas` original for maior que `0`, o job registra warning no log e continua.
+- Se o patch falhar e o `minReplicas` original for maior que `0`, o job registra aviso no log e continua.
 - `HPA_DELETE_RESTORE_ENABLED=true`: salva o HPA em ConfigMap tecnico (`offhours-system`), deleta no `shutdown` e recria no `startup`.
 - `HPA_DELETE_ONLY_ENABLED=true`: deleta o HPA no `shutdown` sem salvar estado e nao restaura no `startup`.
 - Se `HPA_DELETE_ONLY_ENABLED=true` e `HPA_DELETE_RESTORE_ENABLED=true`, prevalece `HPA_DELETE_RESTORE_ENABLED`.
@@ -54,7 +58,7 @@ Opcional:
 Observacoes praticas:
 
 - Em alguns clusters, `minReplicas=0` no HPA pode ser rejeitado quando as metricas sao apenas de `Resource` (CPU/memoria).
-- Nesse caso, `HPA_MIN_ZERO_ENABLED=true` vai gerar warning e seguir com o `shutdown` do Deployment (comportamento best-effort).
+- Nesse caso, `HPA_MIN_ZERO_ENABLED=true` vai gerar aviso e seguir com o `shutdown` do Deployment (comportamento best-effort).
 - Se o objetivo e garantir `replicas=0` mesmo com essa limitacao, prefira `HPA_DELETE_RESTORE_ENABLED=true`.
 - Se usar `HPA_DELETE_ONLY_ENABLED=true` sem Argo/Flux, o HPA pode permanecer ausente ate restauracao manual.
 
