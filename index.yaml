@@ -2,6 +2,16 @@ apiVersion: v1
 entries:
   k8s-offhours:
   - apiVersion: v2
+    appVersion: 0.2.3
+    created: "2026-03-07T16:57:15.373008385Z"
+    description: Helm chart for K8s OffHours CronJobs
+    digest: 1eeda0dded5a06d8fba50748724c0a93069337db8ba21b4020679da047f85940
+    name: k8s-offhours
+    type: application
+    urls:
+    - https://github.com/DavidFerreira21/K8s-OffHours/releases/download/k8s-offhours-0.2.4/k8s-offhours-0.2.4.tgz
+    version: 0.2.4
+  - apiVersion: v2
     appVersion: 0.2.2
     created: "2026-03-06T16:55:47.464197242Z"
     description: Helm chart for K8s OffHours CronJobs
@@ -31,4 +41,4 @@ entries:
     urls:
     - https://github.com/DavidFerreira21/K8s-OffHours/releases/download/k8s-offhours-0.2.1/k8s-offhours-0.2.1.tgz
     version: 0.2.1
-generated: "2026-03-06T16:55:47.464403821Z"
+generated: "2026-03-07T16:57:15.373025076Z"
