@@ -9,6 +9,7 @@ Se voce chegou agora no repositorio, siga esta ordem:
 ## Escolha rapida por objetivo
 
 - Quero entender como funciona internamente: [architecture.md](architecture.md)
+- Quero entender o motor Python (fluxo e funcoes): [engine-python.md](engine-python.md)
 - Quero configurar variaveis e labels: [configuration.md](configuration.md)
 - Quero implantar em cluster real: [deploy.md](deploy.md)
 - Quero operar com seguranca (RBAC, HPA, GitOps): [operations.md](operations.md)

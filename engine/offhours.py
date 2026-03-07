@@ -8,14 +8,22 @@ Execution summary:
 """
 
 import json
-import os
 import shutil
 import ssl
 import subprocess
 import sys
 import time
 from hashlib import sha1
+from pathlib import Path
 from urllib import error, parse, request
+
+try:
+    from offhours_core import settings as core_settings
+except ModuleNotFoundError:
+    script_dir = Path(__file__).resolve().parent
+    if str(script_dir) not in sys.path:
+        sys.path.insert(0, str(script_dir))
+    from offhours_core import settings as core_settings
 
 SCRIPT_NAME = "offhours"
 STATE_NAMESPACE = "offhours-system"
@@ -28,6 +36,28 @@ _ALL_APPS_CACHE: list[dict] | None = None
 _APP_CACHE: dict[str, dict] = {}
 _PROTECTED_DEPLOYMENTS_CACHE: dict[str, set[str]] = {}
 _APP_OWNER_INDEX_CACHE: dict[str, dict[str, str]] = {}
+_SETTINGS: "core_settings.Settings | None" = None
+
+
+def settings() -> core_settings.Settings | None:
+    """Return loaded settings when main() has initialized them."""
+    return _SETTINGS
+
+
+def dry_run_enabled() -> bool:
+    """Read DRY_RUN consistently with fallback for direct unit test calls."""
+    loaded = settings()
+    if loaded is not None:
+        return loaded.dry_run
+    return env_bool("DRY_RUN", False)
+
+
+def verbose_enabled() -> bool:
+    """Read VERBOSE consistently with fallback for direct unit test calls."""
+    loaded = settings()
+    if loaded is not None:
+        return loaded.verbose
+    return env_bool("VERBOSE", False)
 
 
 def log(msg: str) -> None:
@@ -47,7 +77,7 @@ def err(msg: str) -> None:
 
 def debug(msg: str) -> None:
     """Print a debug log when VERBOSE=true."""
-    if env_bool("VERBOSE", False):
+    if verbose_enabled():
         print(f"[DEBUG] {msg}")
 
 
@@ -59,7 +89,7 @@ def fail(msg: str) -> None:
 
 def reset_runtime_caches() -> None:
     """Reset all in-memory caches used by this process."""
-    global _ALL_APPS_CACHE
+    global _ALL_APPS_CACHE, _SETTINGS
 
     _DEPLOYMENTS_CACHE.clear()
     _DEPLOYMENT_CACHE.clear()
@@ -68,57 +98,50 @@ def reset_runtime_caches() -> None:
     _PROTECTED_DEPLOYMENTS_CACHE.clear()
     _APP_OWNER_INDEX_CACHE.clear()
     _ALL_APPS_CACHE = None
+    _SETTINGS = None
 
 
 # Environment parsing and validation ------------------------------------------------------------
 def env_str(name: str, default: str | None = None) -> str:
     """Read a string environment variable, optionally with default."""
-    value = os.getenv(name)
-    if value is None:
-        if default is None:
-            fail(f"Missing required environment variable: {name}")
-        return default
-    return value
+    try:
+        return core_settings.env_str(name, default)
+    except core_settings.SettingsError as exc:
+        fail(str(exc))
+        return ""
 
 
 def env_bool(name: str, default: bool) -> bool:
     """Read a boolean env var represented as 'true' or 'false'."""
-    raw = os.getenv(name)
-    if raw is None:
+    try:
+        return core_settings.env_bool(name, default)
+    except core_settings.SettingsError as exc:
+        fail(str(exc))
         return default
-    if raw not in {"true", "false"}:
-        fail(f"{name} must be 'true' or 'false'")
-    return raw == "true"
 
 
 def env_int(name: str, default: int) -> int:
     """Read an integer environment variable."""
-    raw = os.getenv(name)
-    if raw is None:
-        return default
     try:
-        return int(raw)
-    except ValueError:
-        fail(f"{name} must be an integer")
+        return core_settings.env_int(name, default)
+    except core_settings.SettingsError as exc:
+        fail(str(exc))
         return default
 
 
 def env_float(name: str, default: float) -> float:
     """Read a float environment variable."""
-    raw = os.getenv(name)
-    if raw is None:
-        return default
     try:
-        return float(raw)
-    except ValueError:
-        fail(f"{name} must be a number")
+        return core_settings.env_float(name, default)
+    except core_settings.SettingsError as exc:
+        fail(str(exc))
         return default
 
 
 def run_cmd(args: list[str], capture: bool = False, dry_run: bool = False) -> str:
     """Execute a shell command and optionally capture stdout."""
     cmd_str = " ".join(args)
-    if dry_run and env_bool("DRY_RUN", False):
+    if dry_run and dry_run_enabled():
         print(f"[DRYRUN] {cmd_str}")
         return ""
 
@@ -151,38 +174,13 @@ def check_dependencies() -> None:
         fail("Command not found: kubectl")
 
 
-def validate_env() -> None:
-    """Validate required/optional environment variables and accepted values."""
-    _ = env_str("SCHEDULE_NAME")
-
-    action = env_str("ACTION")
-    if action not in {"shutdown", "startup"}:
-        fail("ACTION must be 'shutdown' or 'startup'")
-
-    argo_enabled = env_str("ARGO_ENABLED")
-    if argo_enabled not in {"true", "false"}:
-        fail("ARGO_ENABLED must be 'true' or 'false'")
-
-    schedule_scope = env_str("SCHEDULE_SCOPE", "namespace")
-    if schedule_scope not in {"namespace", "deployment"}:
-        fail("SCHEDULE_SCOPE must be 'namespace' or 'deployment'")
-
-    _ = env_str("DEFAULT_STARTUP_REPLICAS", "1")
-    _ = env_bool("HPA_MIN_ZERO_ENABLED", False)
-    _ = env_bool("HPA_DELETE_RESTORE_ENABLED", False)
-    _ = env_bool("HPA_DELETE_ONLY_ENABLED", False)
-    _ = env_bool("PROTECTED_APP_STRICT_MODE", True)
-    _ = env_bool("ARGO_DISCOVERY_USE_AUTOMATIC", True)
-    _ = env_bool("ARGO_DISCOVERY_USE_MANUAL", False)
-    _ = env_int("ARGO_API_RETRIES", 2)
-    _ = env_float("ARGO_API_RETRY_BASE_SECONDS", 0.2)
-    _ = env_float("ARGO_API_RETRY_MAX_SECONDS", 1.0)
-
-    if env_bool("ARGO_ENABLED", False):
-        _ = env_str("ARGO_SERVER")
-        _ = env_str("ARGO_TOKEN")
-        _ = env_str("ARGO_SCHEME", "https")
-        _ = env_bool("ARGO_INSECURE", False)
+def validate_env() -> core_settings.Settings:
+    """Validate environment and return immutable runtime settings."""
+    try:
+        return core_settings.load_settings()
+    except core_settings.SettingsError as exc:
+        fail(str(exc))
+        raise
 
 
 # Kubernetes helpers ---------------------------------------------------------------------------
@@ -327,7 +325,7 @@ def scale_deployment(namespace: str, deploy: str, replicas: int) -> None:
 def run_kubectl_best_effort(args: list[str], stdin_data: str | None = None) -> tuple[bool, str]:
     """Run kubectl without terminating the whole job on command failure."""
     cmd_str = " ".join(args)
-    if env_bool("DRY_RUN", False):
+    if dry_run_enabled():
         print(f"[DRYRUN] {cmd_str}")
         return True, ""
 
@@ -484,12 +482,41 @@ def apply_hpa_manifest(hpa_manifest: dict, namespace: str, deploy: str) -> bool:
 
 def hpa_delete_restore_enabled() -> bool:
     """Return whether delete/restore HPA mode is enabled."""
+    loaded = settings()
+    if loaded is not None:
+        return loaded.hpa_delete_restore_enabled
     return env_bool("HPA_DELETE_RESTORE_ENABLED", False)
 
 
 def hpa_delete_only_enabled() -> bool:
     """Return whether delete-only HPA mode is enabled."""
+    loaded = settings()
+    if loaded is not None:
+        return loaded.hpa_delete_only_enabled
     return env_bool("HPA_DELETE_ONLY_ENABLED", False)
+
+
+def hpa_min_zero_enabled() -> bool:
+    """Return whether min-zero HPA mode is enabled."""
+    loaded = settings()
+    if loaded is not None:
+        return loaded.hpa_min_zero_enabled
+    return env_bool("HPA_MIN_ZERO_ENABLED", False)
+
+
+def resolve_hpa_mode() -> str:
+    """Resolve active HPA mode with precedence rules.
+
+    Precedence:
+    1) delete-restore
+    2) delete-only
+    3) min-zero
+    """
+    if hpa_delete_restore_enabled():
+        return "delete-restore"
+    if hpa_delete_only_enabled():
+        return "delete-only"
+    return "min-zero"
 
 
 def maybe_delete_hpa_only(namespace: str, deploy: str) -> None:
@@ -643,7 +670,7 @@ def remove_hpa_original_min_annotation(namespace: str, hpa_name: str) -> None:
 
 def maybe_set_hpa_min_to_zero(namespace: str, deploy: str) -> None:
     """Best-effort HPA handling on shutdown when enabled by flag."""
-    if not env_bool("HPA_MIN_ZERO_ENABLED", False):
+    if not hpa_min_zero_enabled():
         return
 
     hpa = get_hpa_for_deployment(namespace, deploy)
@@ -683,7 +710,7 @@ def maybe_set_hpa_min_to_zero(namespace: str, deploy: str) -> None:
 
 def maybe_restore_hpa_min(namespace: str, deploy: str) -> None:
     """Best-effort HPA minReplicas restoration on startup when enabled."""
-    if not env_bool("HPA_MIN_ZERO_ENABLED", False):
+    if not hpa_min_zero_enabled():
         return
 
     hpa = get_hpa_for_deployment(namespace, deploy)
@@ -710,10 +737,11 @@ def maybe_restore_hpa_min(namespace: str, deploy: str) -> None:
 
 def maybe_handle_hpa_shutdown(namespace: str, deploy: str) -> None:
     """Handle HPA behavior on shutdown according to selected mode flags."""
-    if hpa_delete_restore_enabled():
+    mode = resolve_hpa_mode()
+    if mode == "delete-restore":
         maybe_delete_hpa_for_restore(namespace, deploy)
         return
-    if hpa_delete_only_enabled():
+    if mode == "delete-only":
         maybe_delete_hpa_only(namespace, deploy)
         return
     maybe_set_hpa_min_to_zero(namespace, deploy)
@@ -721,10 +749,11 @@ def maybe_handle_hpa_shutdown(namespace: str, deploy: str) -> None:
 
 def maybe_handle_hpa_startup(namespace: str, deploy: str) -> None:
     """Handle HPA behavior on startup according to selected mode flags."""
-    if hpa_delete_restore_enabled():
+    mode = resolve_hpa_mode()
+    if mode == "delete-restore":
         maybe_restore_deleted_hpa(namespace, deploy)
         return
-    if hpa_delete_only_enabled():
+    if mode == "delete-only":
         return
     maybe_restore_hpa_min(namespace, deploy)
 
@@ -764,7 +793,8 @@ def argo_request(method: str, path: str, body: dict | None = None, mutate: bool 
     if body is not None:
         payload = json.dumps(body).encode("utf-8")
 
-    if mutate and env_bool("DRY_RUN", False):
+    if mutate and dry_run_enabled():
+        # Mutating calls honor dry-run regardless of mode.
         preview = json.dumps(body) if body is not None else ""
         print(f"[DRYRUN] ARGO {method} {url} {preview}".strip())
         return {}
@@ -1073,17 +1103,70 @@ def argo_resume_and_sync_app(app_name: str) -> None:
 
 
 # Action handlers ------------------------------------------------------------------------------
-def handle_shutdown_namespace(namespace: str) -> None:
-    """Execute shutdown flow for namespace scope.
+def argo_enabled() -> bool:
+    """Return whether Argo mode is enabled."""
+    loaded = settings()
+    if loaded is not None:
+        return loaded.argo_enabled
+    return env_bool("ARGO_ENABLED", False)
 
-    In strict mode, apps with any protected deployment are skipped entirely.
-    """
+
+def strict_mode_enabled() -> bool:
+    """Return whether strict protection mode is enabled."""
+    loaded = settings()
+    if loaded is not None:
+        return loaded.protected_app_strict_mode
+    return env_bool("PROTECTED_APP_STRICT_MODE", True)
+
+
+def _find_strict_blocked_apps(namespace: str, apps: set[str], startup: bool) -> set[str]:
+    """Return Argo apps blocked by strict mode in one namespace."""
+    if not strict_mode_enabled():
+        return set()
+
+    blocked: set[str] = set()
+    for app in sorted(apps):
+        if not app_has_protected_deployment(app, namespace):
+            continue
+        blocked.add(app)
+        reason = (
+            "startup will not resume/sync this app"
+            if startup
+            else "app will not be paused and its deployments will not be scaled"
+        )
+        log(f"Strict mode: app {app} has protected deployment(s), {reason}")
+    return blocked
+
+
+def _should_skip_deployment_by_strict(namespace: str, deploy: str, blocked_apps: set[str]) -> bool:
+    """Return True when deployment owner app is blocked by strict mode."""
+    if not argo_enabled() or not strict_mode_enabled():
+        return False
+    owner = get_argocd_app_for_deployment(namespace, deploy)
+    return bool(owner and owner in blocked_apps)
+
+
+def _run_shutdown_for_deployment(namespace: str, deploy: str) -> None:
+    """Execute shutdown operations for one deployment."""
+    save_original_replicas(namespace, deploy)
+    maybe_handle_hpa_shutdown(namespace, deploy)
+    scale_deployment(namespace, deploy, 0)
+
+
+def _run_startup_for_deployment(namespace: str, deploy: str) -> None:
+    """Execute startup operations for one deployment."""
+    maybe_handle_hpa_startup(namespace, deploy)
+    if argo_enabled():
+        return
+    scale_deployment(namespace, deploy, get_restore_replicas(namespace, deploy))
+
+
+def handle_shutdown_namespace(namespace: str) -> None:
+    """Execute shutdown flow for namespace scope."""
     log(f"Processing namespace for shutdown: {namespace}")
 
-    strict_blocked_apps: set[str] = set()
-    apps: set[str] = set()
-
-    if env_bool("ARGO_ENABLED", False):
+    blocked_apps: set[str] = set()
+    if argo_enabled():
         apps = get_argocd_apps_from_namespace(namespace)
         if not apps:
             err(
@@ -1092,17 +1175,9 @@ def handle_shutdown_namespace(namespace: str) -> None:
             )
             warn("Deployments may be reconciled back by Argo CD if sync was not paused.")
 
-        if env_bool("PROTECTED_APP_STRICT_MODE", True):
-            for app in sorted(apps):
-                if app_has_protected_deployment(app, namespace):
-                    strict_blocked_apps.add(app)
-                    log(
-                        f"Strict mode: app {app} has protected deployment(s), "
-                        "app will not be paused and its deployments will not be scaled"
-                    )
-
+        blocked_apps = _find_strict_blocked_apps(namespace, apps, startup=False)
         for app in sorted(apps):
-            if env_bool("PROTECTED_APP_STRICT_MODE", True) and app in strict_blocked_apps:
+            if strict_mode_enabled() and app in blocked_apps:
                 log(f"Strict mode: skipping sync pause for app {app}")
                 continue
             argo_pause_app(app)
@@ -1111,29 +1186,22 @@ def handle_shutdown_namespace(namespace: str) -> None:
         if is_protected_deployment(namespace, deploy):
             log(f"Skipping protected deployment: {namespace}/{deploy}")
             continue
-
-        if env_bool("ARGO_ENABLED", False) and env_bool("PROTECTED_APP_STRICT_MODE", True):
+        if _should_skip_deployment_by_strict(namespace, deploy, blocked_apps):
             owner = get_argocd_app_for_deployment(namespace, deploy)
-            if owner and owner in strict_blocked_apps:
-                log(
-                    f"Strict mode: skipping deployment {namespace}/{deploy} "
-                    f"because app {owner} has protected deployment(s)"
-                )
-                continue
-
-        save_original_replicas(namespace, deploy)
-        maybe_handle_hpa_shutdown(namespace, deploy)
-        scale_deployment(namespace, deploy, 0)
+            log(
+                f"Strict mode: skipping deployment {namespace}/{deploy} "
+                f"because app {owner} has protected deployment(s)"
+            )
+            continue
+        _run_shutdown_for_deployment(namespace, deploy)
 
 
 def handle_startup_namespace(namespace: str) -> None:
-    """Execute startup flow for namespace scope.
-
-    In strict mode, apps with protected deployments are not resumed/synced.
-    """
+    """Execute startup flow for namespace scope."""
     log(f"Processing namespace for startup: {namespace}")
 
-    if env_bool("ARGO_ENABLED", False):
+    blocked_apps: set[str] = set()
+    if argo_enabled():
         apps = get_argocd_apps_from_namespace(namespace)
         if not apps:
             err(
@@ -1142,41 +1210,56 @@ def handle_startup_namespace(namespace: str) -> None:
             )
             return
 
-        strict_blocked_apps: set[str] = set()
-        if env_bool("PROTECTED_APP_STRICT_MODE", True):
-            for app in sorted(apps):
-                if app_has_protected_deployment(app, namespace):
-                    strict_blocked_apps.add(app)
-                    log(
-                        f"Strict mode: app {app} has protected deployment(s), "
-                        "startup will not resume/sync this app"
-                    )
-
+        blocked_apps = _find_strict_blocked_apps(namespace, apps, startup=True)
         for app in sorted(apps):
-            if env_bool("PROTECTED_APP_STRICT_MODE", True) and app in strict_blocked_apps:
+            if strict_mode_enabled() and app in blocked_apps:
                 log(f"Strict mode: skipping startup resume/sync for app {app}")
                 continue
             argo_resume_and_sync_app(app)
-
-        for deploy in get_deployments(namespace):
-            if is_protected_deployment(namespace, deploy):
-                continue
-
-            if env_bool("PROTECTED_APP_STRICT_MODE", True):
-                owner = get_argocd_app_for_deployment(namespace, deploy)
-                if owner and owner in strict_blocked_apps:
-                    continue
-            maybe_handle_hpa_startup(namespace, deploy)
-        return
 
     for deploy in get_deployments(namespace):
         if is_protected_deployment(namespace, deploy):
             log(f"Skipping protected deployment: {namespace}/{deploy}")
             continue
+        if _should_skip_deployment_by_strict(namespace, deploy, blocked_apps):
+            continue
+        _run_startup_for_deployment(namespace, deploy)
 
-        replicas = get_restore_replicas(namespace, deploy)
-        maybe_handle_hpa_startup(namespace, deploy)
-        scale_deployment(namespace, deploy, replicas)
+
+def _collect_app_keys_for_pairs(pairs: list[tuple[str, str]]) -> set[tuple[str, str]]:
+    """Resolve unique (namespace, app) keys for deployment-scope pairs."""
+    app_keys: set[tuple[str, str]] = set()
+    for namespace, deploy in pairs:
+        owner = get_argocd_app_for_deployment(namespace, deploy)
+        if owner is None:
+            err(f"No Argo CD application found for deployment {namespace}/{deploy}. Continuing.")
+            continue
+        app_keys.add((namespace, owner))
+    return app_keys
+
+
+def _collect_strict_blocked_keys(
+    app_keys: set[tuple[str, str]], startup: bool
+) -> set[tuple[str, str]]:
+    """Resolve blocked app keys in deployment scope strict mode."""
+    if not strict_mode_enabled():
+        return set()
+
+    blocked: set[tuple[str, str]] = set()
+    for namespace, app in sorted(app_keys):
+        if not app_has_protected_deployment(app, namespace):
+            continue
+        blocked.add((namespace, app))
+        reason = (
+            "startup will not resume/sync this app"
+            if startup
+            else "app will not be paused and its deployments will not be scaled"
+        )
+        log(
+            "Strict mode: app "
+            f"{app} in namespace {namespace} has protected deployment(s), {reason}"
+        )
+    return blocked
 
 
 def handle_shutdown_deployment_scope() -> None:
@@ -1186,34 +1269,12 @@ def handle_shutdown_deployment_scope() -> None:
         warn(f"No deployments found for schedule: {env_str('SCHEDULE_NAME')}")
         return
 
-    app_keys: set[tuple[str, str]] = set()
     strict_blocked_keys: set[tuple[str, str]] = set()
-
-    if env_bool("ARGO_ENABLED", False):
-        for namespace, deploy in pairs:
-            owner = get_argocd_app_for_deployment(namespace, deploy)
-            if owner is None:
-                err(
-                    f"No Argo CD application found for deployment {namespace}/{deploy}. Continuing."
-                )
-                continue
-            app_keys.add((namespace, owner))
-
-        if env_bool("PROTECTED_APP_STRICT_MODE", True):
-            for namespace, app in sorted(app_keys):
-                if app_has_protected_deployment(app, namespace):
-                    strict_blocked_keys.add((namespace, app))
-                    log(
-                        "Strict mode: app "
-                        f"{app} in namespace {namespace} has protected deployment(s), "
-                        "app will not be paused and its deployments will not be scaled"
-                    )
-
+    if argo_enabled():
+        app_keys = _collect_app_keys_for_pairs(pairs)
+        strict_blocked_keys = _collect_strict_blocked_keys(app_keys, startup=False)
         for namespace, app in sorted(app_keys):
-            if (
-                env_bool("PROTECTED_APP_STRICT_MODE", True)
-                and (namespace, app) in strict_blocked_keys
-            ):
+            if strict_mode_enabled() and (namespace, app) in strict_blocked_keys:
                 log(f"Strict mode: skipping sync pause for app {app} in namespace {namespace}")
                 continue
             argo_pause_app(app)
@@ -1222,8 +1283,7 @@ def handle_shutdown_deployment_scope() -> None:
         if is_protected_deployment(namespace, deploy):
             log(f"Skipping protected deployment: {namespace}/{deploy}")
             continue
-
-        if env_bool("ARGO_ENABLED", False) and env_bool("PROTECTED_APP_STRICT_MODE", True):
+        if argo_enabled() and strict_mode_enabled():
             owner = get_argocd_app_for_deployment(namespace, deploy)
             if owner and (namespace, owner) in strict_blocked_keys:
                 log(
@@ -1231,50 +1291,22 @@ def handle_shutdown_deployment_scope() -> None:
                     f"because app {owner} has protected deployment(s)"
                 )
                 continue
-
-        save_original_replicas(namespace, deploy)
-        maybe_handle_hpa_shutdown(namespace, deploy)
-        scale_deployment(namespace, deploy, 0)
+        _run_shutdown_for_deployment(namespace, deploy)
 
 
 def handle_startup_deployment_scope() -> None:
-    """Execute startup flow for deployment scope.
-
-    In Argo mode, resume/sync app owners for selected deployments while still
-    enforcing strict-mode protection rules.
-    """
+    """Execute startup flow for deployment scope."""
     pairs = get_target_deployment_pairs()
     if not pairs:
         warn(f"No deployments found for schedule: {env_str('SCHEDULE_NAME')}")
         return
 
-    if env_bool("ARGO_ENABLED", False):
-        app_keys: set[tuple[str, str]] = set()
-        strict_blocked_keys: set[tuple[str, str]] = set()
-        for namespace, deploy in pairs:
-            owner = get_argocd_app_for_deployment(namespace, deploy)
-            if owner is None:
-                err(
-                    f"No Argo CD application found for deployment {namespace}/{deploy}. Continuing."
-                )
-                continue
-            app_keys.add((namespace, owner))
-
-        if env_bool("PROTECTED_APP_STRICT_MODE", True):
-            for namespace, app in sorted(app_keys):
-                if app_has_protected_deployment(app, namespace):
-                    strict_blocked_keys.add((namespace, app))
-                    log(
-                        "Strict mode: app "
-                        f"{app} in namespace {namespace} has protected deployment(s), "
-                        "startup will not resume/sync this app"
-                    )
-
+    strict_blocked_keys: set[tuple[str, str]] = set()
+    if argo_enabled():
+        app_keys = _collect_app_keys_for_pairs(pairs)
+        strict_blocked_keys = _collect_strict_blocked_keys(app_keys, startup=True)
         for namespace, app in sorted(app_keys):
-            if (
-                env_bool("PROTECTED_APP_STRICT_MODE", True)
-                and (namespace, app) in strict_blocked_keys
-            ):
+            if strict_mode_enabled() and (namespace, app) in strict_blocked_keys:
                 log(
                     "Strict mode: skipping startup resume/sync for app "
                     f"{app} in namespace {namespace}"
@@ -1282,47 +1314,35 @@ def handle_startup_deployment_scope() -> None:
                 continue
             argo_resume_and_sync_app(app)
 
-        for namespace, deploy in pairs:
-            if is_protected_deployment(namespace, deploy):
-                continue
-            if env_bool("PROTECTED_APP_STRICT_MODE", True):
-                owner = get_argocd_app_for_deployment(namespace, deploy)
-                if owner and (namespace, owner) in strict_blocked_keys:
-                    continue
-            maybe_handle_hpa_startup(namespace, deploy)
-        return
-
     for namespace, deploy in pairs:
         if is_protected_deployment(namespace, deploy):
             log(f"Skipping protected deployment: {namespace}/{deploy}")
             continue
-        replicas = get_restore_replicas(namespace, deploy)
-        maybe_handle_hpa_startup(namespace, deploy)
-        scale_deployment(namespace, deploy, replicas)
+        if argo_enabled() and strict_mode_enabled():
+            owner = get_argocd_app_for_deployment(namespace, deploy)
+            if owner and (namespace, owner) in strict_blocked_keys:
+                continue
+        _run_startup_for_deployment(namespace, deploy)
 
 
 def main() -> None:
     """Entrypoint: validate config, select scope and run action."""
+    global _SETTINGS
     reset_runtime_caches()
-    validate_env()
+    _SETTINGS = validate_env()
     check_dependencies()
 
     log(f"Starting {SCRIPT_NAME}")
     log(
-        "SCHEDULE_NAME={s} SCHEDULE_SCOPE={ss} ACTION={a} ARGO_ENABLED={ae} "
-        "DRY_RUN={dr} PROTECTED_APP_STRICT_MODE={ps} "
-        "HPA_MIN_ZERO_ENABLED={hmz} HPA_DELETE_RESTORE_ENABLED={hdr} "
-        "HPA_DELETE_ONLY_ENABLED={hdo}".format(
-            s=env_str("SCHEDULE_NAME"),
-            ss=env_str("SCHEDULE_SCOPE", "namespace"),
-            a=env_str("ACTION"),
-            ae=env_str("ARGO_ENABLED"),
-            dr=os.getenv("DRY_RUN", "false"),
-            ps=os.getenv("PROTECTED_APP_STRICT_MODE", "true"),
-            hmz=os.getenv("HPA_MIN_ZERO_ENABLED", "false"),
-            hdr=os.getenv("HPA_DELETE_RESTORE_ENABLED", "false"),
-            hdo=os.getenv("HPA_DELETE_ONLY_ENABLED", "false"),
-        )
+        f"SCHEDULE_NAME={_SETTINGS.schedule_name} "
+        f"SCHEDULE_SCOPE={_SETTINGS.schedule_scope} "
+        f"ACTION={_SETTINGS.action} "
+        f"ARGO_ENABLED={str(_SETTINGS.argo_enabled).lower()} "
+        f"DRY_RUN={str(_SETTINGS.dry_run).lower()} "
+        f"PROTECTED_APP_STRICT_MODE={str(_SETTINGS.protected_app_strict_mode).lower()} "
+        f"HPA_MIN_ZERO_ENABLED={str(_SETTINGS.hpa_min_zero_enabled).lower()} "
+        f"HPA_DELETE_RESTORE_ENABLED={str(_SETTINGS.hpa_delete_restore_enabled).lower()} "
+        f"HPA_DELETE_ONLY_ENABLED={str(_SETTINGS.hpa_delete_only_enabled).lower()}"
     )
 
     if hpa_delete_only_enabled() and hpa_delete_restore_enabled():
@@ -1336,24 +1356,24 @@ def main() -> None:
             "and not restored by this job. Use with caution; restoration "
             "depends on GitOps reconciliation or manual apply."
         )
-        if not env_bool("ARGO_ENABLED", False):
+        if not argo_enabled():
             warn(
                 "HPA_DELETE_ONLY_ENABLED is active with ARGO_ENABLED=false. "
                 "Without GitOps/controller reconciliation, HPAs may remain "
                 "absent until manual restore."
             )
 
-    if env_str("SCHEDULE_SCOPE", "namespace") == "namespace":
+    if _SETTINGS.schedule_scope == "namespace":
         target_namespaces = get_target_namespaces()
         if not target_namespaces:
             warn(f"No namespaces found for schedule: {env_str('SCHEDULE_NAME')}")
         for namespace in target_namespaces:
-            if env_str("ACTION") == "shutdown":
+            if _SETTINGS.action == "shutdown":
                 handle_shutdown_namespace(namespace)
             else:
                 handle_startup_namespace(namespace)
     else:
-        if env_str("ACTION") == "shutdown":
+        if _SETTINGS.action == "shutdown":
             handle_shutdown_deployment_scope()
         else:
             handle_startup_deployment_scope()

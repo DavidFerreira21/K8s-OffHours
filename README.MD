@@ -33,7 +33,9 @@ O K8s OffHours usa execucao orientada por CronJob.
 CronJob (shutdown/startup)
         |
         v
-Engine Python (scripts/offhours.py)
+Engine Python (engine/offhours.py)
+        |
+        +--> Configuracao (engine/offhours_core/settings.py)
         |
         +--> API do Kubernetes (descoberta + scale de workloads)
         |
@@ -142,6 +144,7 @@ Comportamento esperado:
 
 - Entrada principal: [docs/README.md](docs/README.md)
 - Arquitetura: [docs/architecture.md](docs/architecture.md)
+- Motor Python (logica e funcoes): [docs/engine-python.md](docs/engine-python.md)
 - Configuracao: [docs/configuration.md](docs/configuration.md)
 - Deploy: [docs/deploy.md](docs/deploy.md)
 - Operacao e seguranca: [docs/operations.md](docs/operations.md)
@@ -153,8 +156,10 @@ Comportamento esperado:
 
 ```text
 .
-├── scripts/
-│   └── offhours.py
+├── engine/
+│   ├── offhours.py
+│   └── offhours_core/
+│       └── settings.py
 ├── k8s/
 │   ├── base/
 │   └── examples/

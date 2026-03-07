@@ -17,8 +17,8 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: offhours
-              image: david210/k8s-offhours:0.2.2
-              imagePullPolicy: Always
+              image: david210/k8s-offhours:0.2.3
+              imagePullPolicy: IfNotPresent
               envFrom:
                 - configMapRef:
                     name: offhours-config
