@@ -1256,8 +1256,7 @@ def _collect_strict_blocked_keys(
             else "app will not be paused and its deployments will not be scaled"
         )
         log(
-            "Strict mode: app "
-            f"{app} in namespace {namespace} has protected deployment(s), {reason}"
+            f"Strict mode: app {app} in namespace {namespace} has protected deployment(s), {reason}"
         )
     return blocked
 
