@@ -175,6 +175,15 @@ Contribuicoes sao bem-vindas. Comece por:
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 - [SECURITY.md](SECURITY.md)
 
+## Roadmap (planejado)
+
+- Melhorias operacionais e correcoes de bugs
+- Melhorias de observabilidade e logs
+- Evolucao da configuracao via ConfigMap
+- Suporte ampliado a autoscalers (HPA / KEDA)
+- Melhorias de integracao com GitOps
+- Novos cenarios e exemplos de uso
+
 ## Licenca
 
 Este projeto esta sob licenca MIT. Veja [LICENSE](LICENSE).
